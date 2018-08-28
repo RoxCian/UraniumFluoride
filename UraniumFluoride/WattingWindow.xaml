@@ -1,0 +1,19 @@
+﻿<Window x:Name="window" x:Class="WattingWindow"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:UraniumFluoride"
+             mc:Ignorable="d" Height="100.445" Width="586.473" Title="Calculating..." WindowStyle="ToolWindow" ShowInTaskbar="False" WindowStartupLocation="CenterOwner" Topmost="True" MinHeight="100" MinWidth="500" MaxWidth="800" MaxHeight="400">
+    <Grid Background="White">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="73"/>
+            <ColumnDefinition/>
+        </Grid.ColumnDefinitions>
+        <Image/>
+        <Label RenderTransformOrigin="0,0" VerticalContentAlignment="Center" TextOptions.TextHintingMode="Animated" ScrollViewer.HorizontalScrollBarVisibility="Auto" Grid.Column="1">
+            <TextBlock TextWrapping="Wrap" Text="{Binding Info, ElementName=window, StringFormat=Calculating: \{0\}}"/>
+        </Label>
+
+    </Grid>
+</Window>
