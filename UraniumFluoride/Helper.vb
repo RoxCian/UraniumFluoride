@@ -14,7 +14,7 @@ Namespace Helper
         Inherits List(Of CircularList(Of T))
         Public ReadOnly Property ListCapacity As Integer
             Get
-                If Me.Count = 0 Then Return 0 Else Return Me.Item(0).Count
+                If Me.Count = 0 Then Return 0 Else Return Me.Item(0).Capacity
             End Get
         End Property
 
@@ -113,6 +113,7 @@ Namespace Helper
                 MyBase.Add(value)
                 Me._IsValued.Add(False)
             Next
+            Me.Capacity = capacity
         End Sub
         Private Sub New(collection As IEnumerable(Of T))
             MyBase.New(collection)
@@ -120,6 +121,7 @@ Namespace Helper
 
         Public Function GetAbsoluteIndex(relativeIndex As Integer) As Integer
             Dim absoluteIndex As Integer = Me.AbsolutePointerIndex + relativeIndex
+            If Me.Count = 0 Then Return Me.AbsolutePointerIndex
             If absoluteIndex > Me.Count - 1 Then
                 Do Until absoluteIndex <= Me.Count - 1
                     absoluteIndex -= Me.Count

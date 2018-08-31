@@ -13,13 +13,13 @@ Imports ExcelVariant = System.Object
 
 Public Module UtilityFunctions
 #Region "ExcelError"
-    Public ReadOnly ExcelErrorDiv0 As New ErrorWrapper(XlCVError.xlErrDiv0)
-    Public ReadOnly ExcelErrorNa As New ErrorWrapper(XlCVError.xlErrNA)
-    Public ReadOnly ExcelErrorName As New ErrorWrapper(XlCVError.xlErrName)
-    Public ReadOnly ExcelErrorNull As New ErrorWrapper(XlCVError.xlErrNull)
-    Public ReadOnly ExcelErrorNum As New ErrorWrapper(XlCVError.xlErrNum)
-    Public ReadOnly ExcelErrorRef As New ErrorWrapper(XlCVError.xlErrRef)
-    Public ReadOnly ExcelErrorValue As New ErrorWrapper(XlCVError.xlErrValue)
+    Public ReadOnly ExcelErrorDiv0 As ExcelError = ExcelError.ExcelErrorDiv0
+    Public ReadOnly ExcelErrorNa As ExcelError = ExcelError.ExcelErrorNA
+    Public ReadOnly ExcelErrorName As ExcelError = ExcelError.ExcelErrorName
+    Public ReadOnly ExcelErrorNull As ExcelError = ExcelError.ExcelErrorNull
+    Public ReadOnly ExcelErrorNum As ExcelError = ExcelError.ExcelErrorNum
+    Public ReadOnly ExcelErrorRef As ExcelError = ExcelError.ExcelErrorRef
+    Public ReadOnly ExcelErrorValue As ExcelError = ExcelError.ExcelErrorValue
 #End Region
 
     Public ReadOnly Property Application As Excel.Application
@@ -28,7 +28,7 @@ Public Module UtilityFunctions
         End Get
     End Property
 
-    <ExcelFunction(Description:="Banker round", IsVolatile:=True)>
+    <ExcelFunction(Description:="Banker round", IsMacroType:=False)>
     Public Function BankerRound(<MarshalAs(UnmanagedType.Currency)> num As Decimal, pre As Integer, Optional isSignificant As Boolean = False) As ExcelNumber
         If num = 0 Then Return 0
         If isSignificant Then
@@ -571,6 +571,7 @@ Public Module UtilityFunctions
         If top > 0 Then nt.Top = top Else nt.Top = r1st.MergeArea.Top + (r1st.MergeArea.Height - nt.Height) / 2
         If left > 0 Then nt.Left = left Else nt.Left = r1st.MergeArea.Left + (r1st.MergeArea.Width - nt.Width) / 2
         Application.Volatile()
+        Return 0
     End Function
     <ExcelFunction>
     Public Function RemoveObject(objectName As String, Optional worksheetName As String = "", Optional continued As Boolean = False) As ExcelVariant
@@ -607,24 +608,25 @@ Public Module UtilityFunctions
         If Not FormulaDictionary.ContainsKey(formulaName) Then FormulaDictionary.Add(formulaName, formula) Else If FormulaDictionary(formulaName) <> formula Then FormulaDictionary(formulaName) = formula Else Return -1
         Return 0
     End Function
-    <ExcelFunction>
+    <ExcelFunction(Description:="Call formula registered.", IsVolatile:=True, IsMacroType:=False)>
     Public Function FormulaCall(formulaName As String, ParamArray macros As String()) As ExcelVariant
-        Static lock As New Object
-        SyncLock lock
-            Dim d As Dictionary(Of String, String)
-            d = FormulaRegister("__ExtractDictionary", "")
-            If d.ContainsKey(formulaName) Then
-                Dim f As String
-                f = d(formulaName)
-                Dim m As Integer
-                m = 1
-                For i = LBound(macros) To UBound(macros)
-                    f = Replace(f, "$$" & m, macros(i))
-                Next
-                Return Application.Evaluate(f)
-            Else
-                Return ExcelErrorName
-            End If
-        End SyncLock
+        Dim d As Dictionary(Of String, String)
+        d = FormulaRegister("__ExtractDictionary", "")
+        If d.ContainsKey(formulaName) Then
+            Dim f As String
+            f = d(formulaName)
+            Dim m As Integer
+            m = 1
+            For i = LBound(macros) To UBound(macros)
+                f = Replace(f, "$$" & m, macros(i))
+            Next
+            Return Application.Run(f)
+        Else
+            Return ExcelErrorName
+        End If
+    End Function
+    <ExcelFunction>
+    Public Function EvaluateFormula(formula As String) As ExcelVariant
+        Return Application.Run(formula)
     End Function
 End Module

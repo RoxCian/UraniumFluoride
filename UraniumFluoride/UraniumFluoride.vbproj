@@ -99,7 +99,6 @@
     <Import Include="System.Threading.Tasks" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Utility functions v1.24" />
     <Compile Include="UtilityFunctions.Legacy.vb" />
     <Compile Include="Helper.vb" />
     <Compile Include="Initializer.vb" />

@@ -45,7 +45,7 @@ Partial Public Module UtilityFunctions
     End Function
     <ExcelFunction>
     Public Function FILERELATIVEREFERENCE(workbookPath As String, Optional worksheetName As String = "", Optional rangeText As String = "A1") As ExcelRange
-        Return RelativeReference(worksheetName, rangeText, workbookPath)
+        Return ConvertToExcelReference(RelativeReference(worksheetName, rangeText, workbookPath))
     End Function
     <ExcelFunction>
     Public Function STRINGCOUNT(s As String, p As String) As Integer
