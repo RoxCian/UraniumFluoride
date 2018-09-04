@@ -307,7 +307,7 @@ Public Module UtilityFunctions
         Dim f As Boolean
         f = True
 
-        w.Dispatcher.InvokeAsync(Sub()
+        w.Dispatcher.BeginInvoke(Sub()
                                      Do While f
                                          Dim formulaForExecute As New Text.StringBuilder(formula, formula.Length * 2)
                                          For j = 0 To valuesCount - 1
