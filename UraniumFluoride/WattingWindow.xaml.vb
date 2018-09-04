@@ -1,4 +1,7 @@
-﻿Public Class WattingWindow
+﻿Imports System.Windows.Input
+
+Public Class WattingWindow
+    Public ReadOnly Property Canceling As Boolean = False
     Public ReadOnly Property Info As String
         Get
             Return Me.GetValue(InfoProperty)
@@ -20,5 +23,13 @@
 
         ' 在 InitializeComponent() 调用之后添加任何初始化。
         Me.SetValue(InfoProperty, info)
+    End Sub
+
+    Private Sub WattingWindow_KeyUp(sender As Object, e As KeyEventArgs) Handles Me.KeyUp
+        If e.Key = Key.Escape Then
+            Me._Canceling = True
+            Me.Dispatcher.InvokeShutdown()
+            Me.Close()
+        End If
     End Sub
 End Class

@@ -8,8 +8,8 @@ Imports System.Runtime.InteropServices
 
 '查看程序集特性的值
 
-<Assembly: AssemblyTitle("Uranium Fluoride - Excel Utility Working Functions Add-In")>
-<Assembly: AssemblyDescription("")>
+<Assembly: AssemblyTitle("Uranium Fluoride")>
+<Assembly: AssemblyDescription("Utility Working Functions Add-In for Excel")>
 <Assembly: AssemblyCompany("")>
 <Assembly: AssemblyProduct("Uranium Fluoride")>
 <Assembly: AssemblyCopyright("Copyright © Rox Cian 2018")>

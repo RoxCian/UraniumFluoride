@@ -6,7 +6,6 @@ Public Class AddIn
 
     Public Sub AutoOpen() Implements IExcelAddIn.AutoOpen
         ExcelRegistration.GetExcelFunctions.ProcessParamsRegistrations.RegisterFunctions
-
     End Sub
 
     Public Sub AutoClose() Implements IExcelAddIn.AutoClose
