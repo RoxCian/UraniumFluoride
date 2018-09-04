@@ -261,7 +261,7 @@ Public Module UtilityFunctions
         Return ConvertToRange(cell)(1, 1).MergeArea.Columns.count
     End Function
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
-    Public Function DataFitter(formula As String, <MarshalAs(UnmanagedType.Currency)> formulaResult As Decimal, variantIndexToReturn As Integer, <ExcelArgument(AllowReference:=True)> rMinValues As ExcelRange, <ExcelArgument(AllowReference:=True)> rMaxValues As ExcelRange, <ExcelArgument(AllowReference:=True)> rSteps As ExcelRange) As ExcelNumber
+    Public Function DataFitter(formula As String, <MarshalAs(UnmanagedType.Currency)> formulaResult As Decimal, variantIndexToReturn As Integer, <ExcelArgument(AllowReference:=True)> rMinValues As ExcelRange, <ExcelArgument(AllowReference:=True)> rMaxValues As ExcelRange, <ExcelArgument(AllowReference:=True)> rSteps As ExcelRange, Optional isForceRecalculating As Boolean = False) As ExcelNumber
         Static ResultCollection As New Dictionary(Of Integer, ExcelNumber())
 
         Dim minValues_Range As Excel.Range = ConvertToRange(rMinValues), maxValues_Range As Excel.Range = ConvertToRange(rMaxValues), steps_Range As Excel.Range = ConvertToRange(rSteps)
@@ -269,6 +269,7 @@ Public Module UtilityFunctions
         Dim maxValues() As Decimal = GetNumeric(maxValues_Range)
         Dim steps() As Decimal = GetNumeric(steps_Range)
         Dim valuesCount As Integer = Min(minValues.Count, maxValues.Count, steps.Count)
+        If variantIndexToReturn > valuesCount Then Return ExcelErrorNa
         Dim fittedValues(valuesCount - 1) As ExcelNumber
         For i = 0 To valuesCount - 1
             fittedValues(i) = minValues(i)
@@ -300,7 +301,7 @@ Public Module UtilityFunctions
 
 
         Dim argumentsHash As Integer = formula.GetHashCode Xor formulaResult.GetHashCode Xor GetNumericArrayHash(minValues) Xor GetNumericArrayHash(maxValues) Xor GetNumericArrayHash(steps)
-        If ResultCollection.ContainsKey(argumentsHash) Then Return ResultCollection(argumentsHash)(variantIndexToReturn - 1)
+        If ResultCollection.ContainsKey(argumentsHash) And Not isForceRecalculating Then Return ResultCollection(argumentsHash)(variantIndexToReturn - 1)
 
         Dim w As New WattingWindow(info.ToString)
         w.Show()
@@ -308,13 +309,20 @@ Public Module UtilityFunctions
         f = True
 
         w.Dispatcher.BeginInvoke(Sub()
+                                     Dim calculationCount As ULong = 0
                                      Do While f
                                          Dim formulaForExecute As New Text.StringBuilder(formula, formula.Length * 2)
                                          For j = 0 To valuesCount - 1
                                              formulaForExecute = formulaForExecute.Replace("$$" & j + 1, fittedValues(j))
                                          Next
                                          If formulaResult = Application.Evaluate(formulaForExecute.ToString) Then Exit Do
-                                         If w.Canceling = True Then f = False
+                                         calculationCount += 1
+                                         If calculationCount - (calculationCount \ 50000) * 50000 = 0 Then
+                                             If MsgBox("We have calculated " & calculationCount & " times. Do you want to continue?", MsgBoxStyle.OkCancel Xor MsgBoxStyle.Question, "It tooks a long time...") = MsgBoxResult.Cancel Then
+                                                 f = False
+                                                 Exit Do
+                                             End If
+                                         End If
                                          For i = 0 To valuesCount - 1
                                              fittedValues(i) = fittedValues(i) + steps(i)
                                              If fittedValues.Last > maxValues(valuesCount - 1) Then
