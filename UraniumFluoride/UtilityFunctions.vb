@@ -332,7 +332,11 @@ Public Module UtilityFunctions
                                          If formulaResult = Application.Evaluate(formulaForExecute.ToString) Then Exit Do
                                          calculationCount += 1
                                          If calculationCount - (calculationCount \ 50000) * 50000 = 0 Then
+<<<<<<< HEAD
                                              If MsgBox("We have calculated " & calculationCount & " times. Do you want to continue?", MsgBoxStyle.OkCancel Xor MsgBoxStyle.Question, "It took so long...") = MsgBoxResult.Cancel Then
+=======
+                                             If MsgBox("We have calculated " & calculationCount & " times. Do you want to continue?", MsgBoxStyle.OkCancel Xor MsgBoxStyle.Question, "It tooks a long time...") = MsgBoxResult.Cancel Then
+>>>>>>> 145d602abdac85e3d4939d10fea7f263c2bf6d85
                                                  f = False
                                                  Exit Do
                                              End If
