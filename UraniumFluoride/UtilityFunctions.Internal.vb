@@ -13,7 +13,7 @@ Imports ExcelVariant = System.Object
 
 Partial Public Module UtilityFunctions
 
-#Region "Range convert functions"
+#Region "Range converting functions"
     Public Function ConvertToRange(ref As ExcelRange) As Excel.Range
         If TypeOf ref Is ExcelReference Then Return Application.Range(XlCall.Excel(XlCall.xlfReftext, ref, True)) Else If TypeOf ref Is Excel.Range Then Return ref Else Return Nothing
     End Function
@@ -23,28 +23,38 @@ Partial Public Module UtilityFunctions
 #End Region
 
 #Region "Internal implementation of some excel functions"
-    Public Function RangeToValueArray(<ExcelArgument(AllowReference:=True)> r As ExcelRange) As Object()
+    Public Function TrimRange(r As ExcelRange) As Excel.Range
         Dim _Range As Excel.Range = ConvertToRange(r)
-        Static DataDic As New Dictionary(Of Excel.Range, Object())
-        If DataDic.ContainsKey(_Range) Then Return DataDic(_Range)
-        Dim result(_Range.Count - 1) As Object
-        Dim p As Integer
-        p = 0
+        Return Application.Intersect(_Range, _Range.Worksheet.UsedRange)
+    End Function
+    Public Function RangeToArray(<ExcelArgument(AllowReference:=True)> r As ExcelRange) As ExcelVariant()
+        Dim _Range As Excel.Range = TrimRange(r)
+        Dim result(_Range.Count - 1) As ExcelVariant
+
+        Dim p As Integer = 0
         For i = 1 To _Range.Rows.Count
             For j = 1 To _Range.Columns.Count
                 result(p) = _Range(i, j).Value
                 p = p + 1
             Next
         Next
-        If DataDic.Count >= 65536 Then DataDic.Clear()
-        DataDic.Add(_Range, result)
+        Return result
+    End Function
+    Public Function RangeToMatrix(<ExcelArgument(AllowReference:=True)> r As ExcelRange) As ExcelVariant(,)
+        Dim _Range As Excel.Range = TrimRange(r)
+        Dim result(_Range.Rows.Count - 1, _Range.Columns.Count - 1) As ExcelVariant
+        For i = 1 To _Range.Rows.Count
+            For j = 1 To _Range.Columns.Count
+                result(i - 1, j - 1) = _Range(i, j).Value
+            Next
+        Next
         Return result
     End Function
     Public Function Min(r As Excel.Range) As <MarshalAs(UnmanagedType.Currency)> Decimal
-        Return Min(RangeToValueArray(r))
+        Return Min(RangeToArray(r))
     End Function
     Public Function Min(r As ExcelRange) As <MarshalAs(UnmanagedType.Currency)> Decimal
-        Return Min(RangeToValueArray(ConvertToRange(r)))
+        Return Min(RangeToArray(ConvertToRange(r)))
     End Function
     Public Function Min(ParamArray value()) As <MarshalAs(UnmanagedType.Currency)> Decimal
         Dim result As Decimal = Decimal.MaxValue
@@ -54,7 +64,7 @@ Partial Public Module UtilityFunctions
         Return result
     End Function
     Public Function Max(r As ExcelRange) As <MarshalAs(UnmanagedType.Currency)> Decimal
-        Return Max(RangeToValueArray(r))
+        Return Max(RangeToArray(r))
     End Function
     Public Function Max(ParamArray value()) As <MarshalAs(UnmanagedType.Currency)> Decimal
         Dim result As Decimal = Decimal.MinValue
@@ -64,7 +74,7 @@ Partial Public Module UtilityFunctions
         Return result
     End Function
     Public Function Med(r As ExcelRange) As <MarshalAs(UnmanagedType.Currency)> Decimal
-        Return Med(RangeToValueArray(r))
+        Return Med(RangeToArray(r))
     End Function
     Public Function Med(ParamArray value()) As <MarshalAs(UnmanagedType.Currency)> Decimal
         Dim result As Decimal
@@ -82,7 +92,7 @@ Partial Public Module UtilityFunctions
         Return result
     End Function
     Public Function Count(r As ExcelRange) As Integer
-        Return Count(RangeToValueArray(r))
+        Return Count(RangeToArray(r))
     End Function
     Public Function Count(ParamArray value()) As Integer
         Dim result As Integer
@@ -92,7 +102,7 @@ Partial Public Module UtilityFunctions
         Return result
     End Function
     Public Function Sum(r As ExcelRange) As <MarshalAs(UnmanagedType.Currency)> Decimal
-        Return Sum(RangeToValueArray(r))
+        Return Sum(RangeToArray(r))
     End Function
     Public Function Sum(ParamArray value()) As <MarshalAs(UnmanagedType.Currency)> Decimal
         Dim result As Decimal
@@ -108,7 +118,7 @@ Partial Public Module UtilityFunctions
         Return Sum(value) / Count(value)
     End Function
     Public Function GetNumeric(r As ExcelRange) As Decimal()
-        Return GetNumeric(RangeToValueArray(r))
+        Return GetNumeric(RangeToArray(r))
     End Function
     Public Function GetNumeric(ParamArray value()) As Decimal()
         Dim result As New List(Of Decimal)
@@ -152,7 +162,7 @@ Partial Public Module UtilityFunctions
     End Function
 #End Region
 
-#Region "Declaration of clipboard functions"
+#Region "Declaration for clipboard functions"
     Private Declare Auto Function SetClipboardData Lib "user32" (format As UInteger, hData As IntPtr) As IntPtr
     Private Declare Auto Function EnumClipboardFormats Lib "user32" (format As UInteger) As UInteger
     Private Declare Auto Function OpenClipboard Lib "user32" (hWndNewOwner As IntPtr) As Integer
@@ -161,6 +171,7 @@ Partial Public Module UtilityFunctions
     Private Declare Auto Function GlobalLock Lib "kernel32" (hMem As IntPtr) As Integer
     Private Declare Auto Function GlobalUnlock Lib "kernel32" (hMem As IntPtr) As Integer
     Private Declare Auto Function GlobalSize Lib "kernel32" (hMem As IntPtr) As UInteger
+    Private Declare Auto Function GlobalFree Lib "kernel32" (hMem As IntPtr) As Integer
 #End Region
 
 #Region "Functions for reserve & restore clipboard"
@@ -201,7 +212,6 @@ Partial Public Module UtilityFunctions
                     End If
                 End If
             Loop Until formatIndex = 0
-            CloseClipboard
             Return result
         Catch ex As Exception
             Return False
@@ -217,13 +227,14 @@ Partial Public Module UtilityFunctions
             For Each i In reservedData
                 Dim dataSize As Integer = i.Value.Length
                 If dataSize > 0 Then
-                    Dim restorePointer As IntPtr = Marshal.AllocHGlobal(dataSize)
+                    Dim restoreHandle As IntPtr = Marshal.AllocHGlobal(dataSize)
+                    Dim restorePointer As IntPtr = GlobalLock(restoreHandle)
                     Marshal.Copy(i.Value, 0, restorePointer, dataSize)
-                    SetClipboardData(i.Key, restorePointer)
+                    GlobalUnlock(restorePointer)
+                    SetClipboardData(i.Key, restoreHandle)
                     result = True
                 End If
             Next
-            CloseClipboard
             Return result
         Catch ex As Exception
             Return False

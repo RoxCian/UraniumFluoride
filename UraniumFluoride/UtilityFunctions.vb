@@ -38,6 +38,7 @@ Public Module UtilityFunctions
             Return Math.Round(Math.Round(num, 14), pre, MidpointRounding.ToEven)
         End If
     End Function
+
     <ExcelFunction(IsMacroType:=True)>
     Public Function AverageByMean(<ExcelArgument(AllowReference:=True)> nums As ExcelRange, Optional ratio As Double = 0.1) As ExcelNumber
         Dim nums_Range As Excel.Range = ConvertToRange(nums)
@@ -79,6 +80,7 @@ Public Module UtilityFunctions
         Finally
         End Try
     End Function
+
     <ExcelFunction(IsMacroType:=True)>
     Public Function VerifyByMean(<ExcelArgument(AllowReference:=True)> nums As ExcelRange, Optional ratio As Double = 0.1) As ExcelNumber
         Dim nums_Range As Excel.Range = ConvertToRange(nums)
@@ -120,6 +122,7 @@ Public Module UtilityFunctions
         Finally
         End Try
     End Function
+
     <ExcelFunction(IsMacroType:=True)>
     Public Function AverageByMedian(<ExcelArgument(AllowReference:=True)> nums As ExcelRange, Optional ratio As Double = 0.15) As ExcelNumber
         Dim nums_Range As Excel.Range = ConvertToRange(nums)
@@ -135,6 +138,7 @@ Public Module UtilityFunctions
         Finally
         End Try
     End Function
+
     <ExcelFunction(IsMacroType:=True)>
     Public Function VerifyByMedian(<ExcelArgument(AllowReference:=True)> nums As ExcelRange, Optional ratio As Double = 0.15) As ExcelNumber
         Dim nums_Range As Excel.Range = ConvertToRange(nums)
@@ -150,6 +154,7 @@ Public Module UtilityFunctions
         Finally
         End Try
     End Function
+
     <ExcelFunction(IsVolatile:=True)>
     Public Function RandNoRepeat(bottom As Integer, top As Integer, Optional memorySet As Integer = 0, Optional memories As Integer = 30, Optional unrepeatPossibility As Integer = 0.95) As ExcelNumber
         Static memory As New Helper.ValueCircularListCollection(1024, 1024, Nothing)
@@ -174,6 +179,7 @@ Public Module UtilityFunctions
         memory(memorySet).MoveNext(result)
         Return result
     End Function
+
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
     Public Function PageLocalize(<ExcelArgument(AllowReference:=True)> r As ExcelRange, pageRowsCount As Integer, pageColumnsCount As Integer, locationRow As Integer, locationColumn As Integer, pageIndex As Integer) As ExcelVariant
         Dim _Range As Excel.Range = ConvertToRange(r)
@@ -192,11 +198,12 @@ Public Module UtilityFunctions
         pageIndexInColumn = pageIndex Mod pageCountInColumn
         Dim row, column As Integer
         row = pageRowsCount * pageIndexInRow + locationRow
-        column = pageColumnsCount * pageIndexInRow + locationColumn
+        column = pageColumnsCount * pageIndexInColumn + locationColumn
         Return _Range(row, column).Value
     End Function
+
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
-    Public Function PageLocalize2(<ExcelArgument(AllowReference:=True)> r As ExcelRange, <ExcelArgument(AllowReference:=True)> rPage As ExcelRange, <ExcelArgument(AllowReference:=True)> rCell As ExcelRange, pageIndex As Integer) As ExcelVariant
+    Public Function PageLocalizeAbbr(<ExcelArgument(AllowReference:=True)> rPage As ExcelRange, <ExcelArgument(AllowReference:=True)> rCell As ExcelRange, pageIndex As Integer) As ExcelVariant
         Dim page_Range As Excel.Range = ConvertToRange(rPage), cell_Range As Excel.Range = ConvertToRange(rCell)
         Dim cellRow, cellColumn, pageRow, pageColumn As Integer
         pageRow = page_Range.Rows.Count
@@ -209,23 +216,26 @@ Public Module UtilityFunctions
         Do Until cellColumn <= pageColumn
             cellColumn -= pageColumn
         Loop
-        Return PageLocalize(r, pageRow, pageColumn, cellRow, cellColumn, pageIndex)
+        Return PageLocalize(page_Range.Worksheet.UsedRange, pageRow, pageColumn, cellRow, cellColumn, pageIndex)
     End Function
-    '<ExcelFunction>
-    'Public  Function PageLocalize3(<ExcelArgument(AllowReference:=True)> rCell As ExcelRange, pageIndex As Integer) As ExcelVariant
-    '    Dim r As ExcelRange = rCell.Worksheet.UsedRange
-    '    Dim cellRow, cellColumn, pageRow, pageColumn As Integer
 
+    '<ExcelFunction(IsMacroType:=True)>
+    'Public Function PageLocalize2(<ExcelArgument(AllowReference:=True)> rCell As ExcelRange, pageIndex As Integer) As ExcelVariant
+    '    Dim cell_Range As Excel.Range = ConvertToRange(rCell)
+    '    Dim r As ExcelRange = cell_Range.Worksheet.UsedRange
+    '
     'End Function
+
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
-    Public Function PageLocalizeByKeyword(<ExcelArgument(AllowReference:=True)> r As ExcelRange, <ExcelArgument(AllowReference:=True)> rPage As ExcelRange, <ExcelArgument(AllowReference:=True)> rCell As ExcelRange, keyword As Object, Optional isValueMatching As Boolean = False) As ExcelVariant
-        Dim _Range As Excel.Range = ConvertToRange(r), page_Range As Excel.Range = ConvertToRange(rCell), cell_Range As Excel.Range = ConvertToRange(rCell)
-        Dim locationRow = FindRow(_Range, keyword, isValueMatching)
-        Dim locationColumn = FindColumn(_Range, keyword, isValueMatching)
+    Public Function PageLocalizeByKeyword(<ExcelArgument(AllowReference:=True)> rPage As ExcelRange, <ExcelArgument(AllowReference:=True)> rCell As ExcelRange, keyword As ExcelVariant, Optional isValueMatching As Boolean = False) As ExcelVariant
+        Dim page_Range As Excel.Range = ConvertToRange(rCell), cell_Range As Excel.Range = ConvertToRange(rCell)
+        Dim locationRow = FindRow(page_Range.Worksheet.UsedRange, keyword, isValueMatching)
+        Dim locationColumn = FindColumn(page_Range.Worksheet.UsedRange, keyword, isValueMatching)
         If locationRow = 0 Then Return ExcelErrorNa
-        Dim pageIndex As Integer = Math.Ceiling(_Range.Columns.Count / page_Range.Columns.Count) * (locationRow \ page_Range.Rows.Count) + Math.Ceiling(locationColumn \ page_Range.Columns.Count)
-        Return PageLocalize2(r, rPage, rCell, pageIndex)
+        Dim pageIndex As Integer = Math.Ceiling(page_Range.Worksheet.UsedRange.Columns.Count / page_Range.Columns.Count) * (locationRow \ page_Range.Rows.Count) + Math.Ceiling(locationColumn \ page_Range.Columns.Count)
+        Return PageLocalizeAbbr(rPage, rCell, pageIndex)
     End Function
+
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
     Public Function FindRow(<ExcelArgument(AllowReference:=True)> r As ExcelRange, keyword As Object, Optional isValueMatching As Boolean = False) As Integer
         Dim _Range As Excel.Range = ConvertToRange(r)
@@ -236,6 +246,7 @@ Public Module UtilityFunctions
         Next
         Return 0
     End Function
+
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
     Public Function FindColumn(<ExcelArgument(AllowReference:=True)> r As ExcelRange, keyword As Object, Optional isValueMatching As Boolean = False) As Integer
         Dim _Range As Excel.Range = ConvertToRange(r)
@@ -246,20 +257,24 @@ Public Module UtilityFunctions
         Next
         Return 0
     End Function
+
     <ExcelFunction(IsMacroType:=True)>
     Public Function RangeToString(<ExcelArgument(AllowReference:=True)> r As ExcelRange) As String
         Dim _Range As Excel.Range = ConvertToRange(r)
         _Range(1, 1).Calculate
         Return _Range(1, 1).Text
     End Function
+
     <ExcelFunction(IsMacroType:=True)>
     Public Function MergedCellRows(<ExcelArgument(AllowReference:=True)> cell As ExcelRange)
-        Return ConvertToRange(cell)(1, 1).MergeArea.Rows.count
+        Return ConvertToRange(cell)(1, 1).MergeArea.Rows.Count
     End Function
+
     <ExcelFunction(IsMacroType:=True)>
     Public Function MergedCellColumns(<ExcelArgument(AllowReference:=True)> cell As ExcelRange)
-        Return ConvertToRange(cell)(1, 1).MergeArea.Columns.count
+        Return ConvertToRange(cell)(1, 1).MergeArea.Columns.Count
     End Function
+
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
     Public Function DataFitter(formula As String, <MarshalAs(UnmanagedType.Currency)> formulaResult As Decimal, variantIndexToReturn As Integer, <ExcelArgument(AllowReference:=True)> rMinValues As ExcelRange, <ExcelArgument(AllowReference:=True)> rMaxValues As ExcelRange, <ExcelArgument(AllowReference:=True)> rSteps As ExcelRange, Optional isForceRecalculating As Boolean = False) As ExcelNumber
         Static ResultCollection As New Dictionary(Of Integer, ExcelNumber())
@@ -299,7 +314,6 @@ Public Module UtilityFunctions
         Next
         info.Append("}.")
 
-
         Dim argumentsHash As Integer = formula.GetHashCode Xor formulaResult.GetHashCode Xor GetNumericArrayHash(minValues) Xor GetNumericArrayHash(maxValues) Xor GetNumericArrayHash(steps)
         If ResultCollection.ContainsKey(argumentsHash) And Not isForceRecalculating Then Return ResultCollection(argumentsHash)(variantIndexToReturn - 1)
 
@@ -318,7 +332,7 @@ Public Module UtilityFunctions
                                          If formulaResult = Application.Evaluate(formulaForExecute.ToString) Then Exit Do
                                          calculationCount += 1
                                          If calculationCount - (calculationCount \ 50000) * 50000 = 0 Then
-                                             If MsgBox("We have calculated " & calculationCount & " times. Do you want to continue?", MsgBoxStyle.OkCancel Xor MsgBoxStyle.Question, "It tooks a long time...") = MsgBoxResult.Cancel Then
+                                             If MsgBox("We have calculated " & calculationCount & " times. Do you want to continue?", MsgBoxStyle.OkCancel Xor MsgBoxStyle.Question, "It took so long...") = MsgBoxResult.Cancel Then
                                                  f = False
                                                  Exit Do
                                              End If
@@ -338,22 +352,25 @@ Public Module UtilityFunctions
                                          Next
                                      End If
                                  End Sub).Wait()
-        ResultCollection.Add(argumentsHash, fittedValues)
         w.Close()
+        If ResultCollection.ContainsKey(argumentsHash) Then ResultCollection(argumentsHash) = fittedValues Else ResultCollection.Add(argumentsHash, fittedValues)
         Return fittedValues(variantIndexToReturn - 1)
     End Function
+
     <ExcelFunction>
     Public Function RegExFind(text As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelNumber
         Dim e As New Text.RegularExpressions.Regex(pattern, If(isCaseIgnore, System.Text.RegularExpressions.RegexOptions.IgnoreCase, System.Text.RegularExpressions.RegexOptions.None))
         Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(text)
-        If m.Count < index Then Return -1 Else Return m(index - 1).Index + 1
+        If m.Count <= index Then Return -1 Else Return m(index - 1).Index + 1
     End Function
+
     <ExcelFunction>
     Public Function RegExMatch(text As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelString
         Dim e As New Text.RegularExpressions.Regex(pattern, If(isCaseIgnore, System.Text.RegularExpressions.RegexOptions.IgnoreCase, System.Text.RegularExpressions.RegexOptions.None))
         Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(text)
-        If m.Count < index Then Return ExcelErrorNull Else Return m(index).Value
+        If m.Count <= index Then Return ExcelErrorNull Else Return m(index).Value
     End Function
+
     <ExcelFunction(IsMacroType:=True)>
     Public Function RelativeReference(worksheetName As String, rangeText As String, Optional path As String = "") As ExcelRange
         Static memory As New Helper.CircularList(Of (Path As String, Workbook As Workbook))(1024)
@@ -379,10 +396,12 @@ Public Module UtilityFunctions
         Next
         Return ExcelErrorNa
     End Function
+
     <ExcelFunction>
     Public Function RegExMatchesCount(input As String, pattern As String, Optional startat As Integer = 0) As ExcelNumber
         Return New Text.RegularExpressions.Regex(pattern).Matches(input, startat).Count
     End Function
+
     <ExcelFunction(IsMacroType:=True)>
     Public Function VLookUpByRank(<ExcelArgument(AllowReference:=True)> r As ExcelRange, rank As Integer, rankColumn As Integer, lookupColumn As Integer) As ExcelVariant
         Dim _Range As Excel.Range = ConvertToRange(r)
@@ -406,6 +425,7 @@ Public Module UtilityFunctions
         Next
         Return _Range(ranktable.Keys(rank), lookupColumn).Value
     End Function
+
     <ExcelFunction(IsMacroType:=True)>
     Public Function HLookUpByRank(<ExcelArgument(AllowReference:=True)> r As ExcelRange, rank As Integer, rankRow As Integer, lookupRow As Integer) As ExcelVariant
         Dim _Range As Excel.Range = ConvertToRange(r)
@@ -429,6 +449,7 @@ Public Module UtilityFunctions
         Next
         Return _Range(lookupRow, ranktable.Keys(rank)).Value
     End Function
+
     <ExcelFunction>
     Public Function Contents(array As ExcelVariant, searching As ExcelVariant) As ExcelLogical
         If IsArray(array) Then
@@ -443,6 +464,7 @@ Public Module UtilityFunctions
         End If
         Return False
     End Function
+
     <ExcelFunction>
     Public Function Switch(expression As ExcelVariant, ParamArray args() As ExcelVariant) As ExcelVariant
         Dim i As Integer
@@ -454,6 +476,7 @@ Public Module UtilityFunctions
         If Application.IsOdd(args.Count) Then Return args(args.Count - 1)
         Return ExcelErrorNa
     End Function
+
     <ExcelFunction>
     Public Function MinIndex(ParamArray args() As ExcelVariant) As ExcelNumber
         If Not IsArray(args) Then Return 0
@@ -469,6 +492,7 @@ Public Module UtilityFunctions
         Next
         Return result + 1
     End Function
+
     <ExcelFunction>
     Public Function MaxIndex(ParamArray args() As ExcelVariant) As ExcelNumber
         If Not IsArray(args) Then Return 0
@@ -484,10 +508,11 @@ Public Module UtilityFunctions
         Next
         Return result + 1
     End Function
+
     <ExcelFunction>
     Public Function Guid(Optional isCompress As Boolean = False) As ExcelString
         Dim result As String = System.Guid.NewGuid.ToString("N").ToUpper
-        If isCompress Then
+        If Not isCompress Then
             Return result
         Else 'A lossy compress
             Dim result2 As New Text.StringBuilder
@@ -500,14 +525,13 @@ Public Module UtilityFunctions
             Return result2.ToString
         End If
     End Function
+
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
     Public Function CopyTextbox(<ExcelArgument(AllowReference:=True)> r As ExcelRange, textBoxName As String, Optional removeAllRecordedTextBoxes As Boolean = False, Optional left As Double = 0, Optional top As Double = 0, Optional width As Double = 0, Optional height As Double = 0) As ExcelVariant
         Static attachedObjects As New Dictionary(Of String, String)
         Dim _Range As Excel.Range = ConvertToRange(r)
-        Dim ws As Worksheet
-        ws = _Range.Worksheet
-        Dim r1st As Excel.Range
-        r1st = _Range(1, 1)
+        Dim ws As Worksheet = _Range.Worksheet
+        Dim r1st As Excel.Range = _Range(1, 1)
         If removeAllRecordedTextBoxes Then
             For o = 0 To attachedObjects.Count - 1
                 RemoveObject(attachedObjects.Item(o), ws.Name, True)
@@ -519,10 +543,10 @@ Public Module UtilityFunctions
             RemoveObject(attachedObjects(r1st.Address), ws.Name, True)
             attachedObjects.Remove(r1st.Address)
         Loop
+        If _Range.Worksheet.GetHashCode <> Application.ActiveSheet.GetHashCode Then Return "HANGED"
 
         Dim t As Shape = Nothing
-        Dim f As Boolean
-        f = False
+        Dim f As Boolean = False
         For Each t In ws.Shapes
             If t.Name = textBoxName Then
                 If t.Type <> Microsoft.Office.Core.MsoShapeType.msoTextBox Then Resume Next
@@ -531,23 +555,18 @@ Public Module UtilityFunctions
             End If
         Next
         If Not f Then Return "NOTHING TO COPY"
-        Dim oName = t.Name
         Dim nName = t.Name & "_" & Guid(True)
         Dim nt As Excel.Shape
-        Dim textBoxScale As Double
-        textBoxScale = 1
-        If Not (t.Width <= r1st.MergeArea.Width And t.Height <= r1st.MergeArea.Height) Then
-            textBoxScale = Min(r1st.MergeArea.Width / t.Width, r1st.MergeArea.Height / t.Height)
-        End If
+        Dim textBoxScale As Double = 1
+        If Not (t.Width <= r1st.MergeArea.Width And t.Height <= r1st.MergeArea.Height) Then textBoxScale = Min(r1st.MergeArea.Width / t.Width, r1st.MergeArea.Height / t.Height)
 
-        nt = ws.Shapes.AddTextbox(Microsoft.Office.Core.MsoTextOrientation.msoTextOrientationHorizontal, 0, 0, 0, 0)
+        nt = ws.Shapes.AddTextbox(t.TextFrame2.Orientation, 0, 0, 0, 0)
+
         attachedObjects.Add(r1st.Address, nName)
+
+        nt = t.Duplicate
         nt.Name = nName
-        ReserveClipboard()
-        Dim cb
-        t.TextFrame2.TextRange.Copy()
-        nt.TextFrame2.TextRange.Paste()
-        RestoreClipboard()
+
         nt.TextFrame.MarginTop = 0
         nt.TextFrame.MarginBottom = 0
         nt.TextFrame.MarginLeft = 0
@@ -564,6 +583,7 @@ Public Module UtilityFunctions
         If left > 0 Then nt.Left = left Else nt.Left = r1st.MergeArea.Left + (r1st.MergeArea.Width - nt.Width) / 2
         Return 0
     End Function
+
     <ExcelFunction>
     Public Function RemoveObject(objectName As String, Optional worksheetName As String = "", Optional continued As Boolean = False) As ExcelVariant
         Dim ws As Worksheet = Nothing
@@ -590,6 +610,11 @@ Public Module UtilityFunctions
         If Not f Then Return "NOTHING TO REMOVE" Else Return 0
     End Function
 
+    <ExcelFunction>
+    Public Function CrLf() As ExcelString
+        Return Chr(13) & Chr(10)
+    End Function
+
     'Questionable
     '<ExcelFunction>
     'Public Function FormulaRegister(formulaName As String, formula As String) As ExcelVariant
@@ -601,7 +626,8 @@ Public Module UtilityFunctions
     '    If Not FormulaDictionary.ContainsKey(formulaName) Then FormulaDictionary.Add(formulaName, formula) Else If FormulaDictionary(formulaName) <> formula Then FormulaDictionary(formulaName) = formula Else Return -1
     '    Return 0
     'End Function
-    '<ExcelFunction(Description:="Call formula registered.", IsVolatile:=True, IsMacroType:=False)>
+    '
+    '<ExcelFunction(Description:="Call a formula registered.", IsVolatile:=True, IsMacroType:=False)>
     'Public Function FormulaCall(formulaName As String, ParamArray macros As String()) As ExcelVariant
     '    Dim d As Dictionary(Of String, String)
     '    d = FormulaRegister("__ExtractDictionary", "")
