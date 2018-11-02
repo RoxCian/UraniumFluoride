@@ -2,6 +2,7 @@
 Imports Microsoft.Office.Interop
 Imports Microsoft.Office.Interop.Excel
 Imports System.Runtime.InteropServices
+Imports UraniumFluoride.Helper
 #Region "Imports Macros"
 Imports ExcelRange = System.Object
 Imports ExcelNumber = System.Object
@@ -28,51 +29,44 @@ Public Module UtilityFunctions
         End Get
     End Property
 
+    Private Function IrregularValueHandler(value As ExcelVariant) As ExcelVariant
+        Static IrregularValueArray As ExcelVariant() = {-6798283198, -2039484959.4}
+        If IsNumeric(value) AndAlso IrregularValueArray.Contains(value) Then Return ExcelErrorValue
+        Return value
+    End Function
+
     <ExcelFunction(Description:="Banker round")>
     Public Function BankerRound(<MarshalAs(UnmanagedType.Currency)> num As Decimal, pre As Integer, Optional isSignificant As Boolean = False) As ExcelNumber
         If num = 0 Then Return 0
         If isSignificant Then
             Dim power As Integer = Math.Floor(Math.Log10(Math.Abs(num)))
-            Return Math.Round(Math.Round(num / 10 ^ power, 14), pre - 1, MidpointRounding.ToEven) * 10 ^ power
+
+            Return IrregularValueHandler(Math.Round(Math.Round(num / 10 ^ power, 14), pre - 1, MidpointRounding.ToEven) * 10 ^ power)
         Else
-            Return Math.Round(Math.Round(num, 14), pre, MidpointRounding.ToEven)
+            Return IrregularValueHandler(Math.Round(Math.Round(num, 14), pre, MidpointRounding.ToEven))
         End If
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
-    Public Function AverageByMean(<ExcelArgument(AllowReference:=True)> nums As ExcelRange, Optional ratio As Double = 0.1) As ExcelNumber
-        Dim nums_Range As Excel.Range = ConvertToRange(nums)
+    Public Function AverageByMean(num As ExcelVariant(,), Optional ratio As Double = 0.1) As ExcelNumber
         Try
-            If Count(nums_Range) < 3 Then Return Average(nums_Range)
+            Dim value As ExcelVariant() = TrimNumericArray(MatrixToArray(num))
+            If Count(value) = 0 Then Return ExcelErrorNull
+            If Count(value) < 3 Then Return Average(value)
             Dim f As Boolean = False
-            Dim ave = Average(nums_Range)
+            Dim ave = Average(value)
             If ave = 0 Then Return 0
-            Dim i, j As Integer
-            For i = 1 To nums_Range.Rows.Count
-                For j = 1 To nums_Range.Columns.Count
-                    If nums_Range(i, j).Value <> vbEmpty And Math.Abs((nums_Range(i, j).Value - ave) / ave) >= ratio Then
-                        f = True
-                        Exit For
-                    End If
-                Next
+            Dim i As Integer
+            For i = 0 To value.Count - 1
+                If Math.Abs(value(i) - ave) / ave >= ratio Then f = True
                 If f Then Exit For
             Next
             If f Then
-                Dim ave2, sum2 As Decimal, len2 As Integer
-                For k = 1 To nums_Range.Rows.Count
-                    For l = 1 To nums_Range.Columns.Count
-                        If nums_Range(k, l).Value <> vbEmpty And Not (i = k And j = l) Then
-                            sum2 += nums_Range(k, l).Value
-                            len2 += 1
-                        End If
-                    Next
-                Next
-                If sum2 = 0 Then Return 0
-                ave2 = sum2 / len2
-                For k = 1 To nums_Range.Rows.Count
-                    For l = 1 To nums_Range.Columns.Count
-                        If Not (i = k And j = l) And nums_Range(k, l).value <> vbEmpty And Math.Abs((nums_Range(k, l).Value - ave) / ave) >= ratio Then Return ExcelErrorValue
-                    Next
+                value(i) = ExcelEmpty.Value
+                Dim ave2 As Decimal = Average(value)
+                If ave2 = 0 Then Return 0
+                For j = 0 To value.Count - 1
+                    If TypeOf value(j) IsNot ExcelEmpty AndAlso Math.Abs(value(j) - ave) / ave >= ratio Then Return ExcelErrorValue
                 Next
                 Return ave2
             End If
@@ -82,39 +76,24 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
-    Public Function VerifyByMean(<ExcelArgument(AllowReference:=True)> nums As ExcelRange, Optional ratio As Double = 0.1) As ExcelNumber
-        Dim nums_Range As Excel.Range = ConvertToRange(nums)
+    Public Function VerifyByMean(num As ExcelVariant(,), Optional ratio As Double = 0.1) As ExcelNumber
         Try
-            If Count(nums_Range) < 3 Then Return 1
+            Dim value As ExcelVariant() = TrimNumericArray(MatrixToArray(num))
+            If Count(value) < 3 Then Return 65535
             Dim f As Boolean = False
-            Dim ave = Application.WorksheetFunction.Average(nums_Range)
+            Dim ave = Average(value)
             If ave = 0 Then Return -65536
-            Dim i, j As Integer
-            For i = 1 To nums_Range.Rows.Count
-                For j = 1 To nums_Range.Columns.Count
-                    If nums_Range(i, j).Value <> vbEmpty And Math.Abs((nums_Range(i, j).Value - ave) / ave) >= ratio Then
-                        f = True
-                        Exit For
-                    End If
-                Next
+            Dim i As Integer
+            For i = 0 To value.Count - 1
+                If Math.Abs(value(i) - ave) / ave >= ratio Then f = True
                 If f Then Exit For
             Next
             If f Then
-                Dim ave2, sum2 As Decimal, len2 As Integer
-                For k = 1 To nums_Range.Rows.Count
-                    For l = 1 To nums_Range.Columns.Count
-                        If nums_Range(k, l).Value <> vbEmpty And Not (i = k And j = l) Then
-                            sum2 += nums_Range(k, l).Value
-                            len2 += 1
-                        End If
-                    Next
-                Next
-                If sum2 = 0 Then Return -65536
-                ave2 = sum2 / len2
-                For k = 1 To nums_Range.Rows.Count
-                    For l = 1 To nums_Range.Columns.Count
-                        If Not (i = k And j = l) And nums_Range(k, l).Value <> vbEmpty Then If Math.Abs(nums_Range(k, l).Value - ave2) / ave2 >= ratio Then Return -1
-                    Next
+                value(i) = ExcelEmpty.Value
+                Dim ave2 As Decimal = Average(value)
+                If ave2 = 0 Then Return -65536
+                For j = 0 To value.Count - 1
+                    If TypeOf value(j) IsNot ExcelEmpty And Math.Abs(value(j) - ave) / ave >= ratio Then Return -1
                 Next
                 Return 0
             End If
@@ -124,30 +103,30 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
-    Public Function AverageByMedian(<ExcelArgument(AllowReference:=True)> nums As ExcelRange, Optional ratio As Double = 0.15) As ExcelNumber
-        Dim nums_Range As Excel.Range = ConvertToRange(nums)
+    Public Function AverageByMedian(num As ExcelVariant(,), Optional ratio As Double = 0.15) As ExcelNumber
         Try
-            If Count(nums_Range) <= 2 Then Return Average(nums_Range)
-            Dim min As Decimal = UtilityFunctions.Min(nums_Range)
-            Dim max As Decimal = UtilityFunctions.Max(nums_Range)
-            Dim med As Decimal = UtilityFunctions.Med(nums_Range)
+            Dim value As ExcelVariant() = TrimNumericArray(MatrixToArray(num))
+            If Count(value) <= 2 Then Return Average(value)
+            Dim min As Decimal = UtilityFunctions.Min(value)
+            Dim max As Decimal = UtilityFunctions.Max(value)
+            Dim med As Decimal = UtilityFunctions.Med(value)
             If med = 0 Then Return ExcelErrorDiv0
             If Math.Abs((max - med) / med) >= CDec(ratio) And Math.Abs((med - min) / med) >= CDec(ratio) Then Return ExcelErrorValue
             If Math.Abs((max - med) / med) >= CDec(ratio) Or Math.Abs((med - min) / med) >= CDec(ratio) Then Return med
-            Return Average(nums_Range)
+            Return Average(value)
         Finally
         End Try
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
-    Public Function VerifyByMedian(<ExcelArgument(AllowReference:=True)> nums As ExcelRange, Optional ratio As Double = 0.15) As ExcelNumber
-        Dim nums_Range As Excel.Range = ConvertToRange(nums)
+    Public Function VerifyByMedian(num As ExcelVariant(,), Optional ratio As Double = 0.15) As ExcelNumber
         Try
-            If Count(nums_Range) <= 2 Then Return 1
-            Dim min As Decimal = UtilityFunctions.Min(nums_Range)
-            Dim max As Decimal = UtilityFunctions.Max(nums_Range)
-            Dim med As Decimal = UtilityFunctions.Med(nums_Range)
-            If med = 0 Then Return -1
+            Dim value As ExcelVariant() = TrimNumericArray(MatrixToArray(num))
+            If Count(value) <= 2 Then Return 65535
+            Dim min As Decimal = UtilityFunctions.Min(value)
+            Dim max As Decimal = UtilityFunctions.Max(value)
+            Dim med As Decimal = UtilityFunctions.Med(value)
+            If med = 0 Then Return -65536
             If Math.Abs((max - med) / med) >= CDec(ratio) And Math.Abs((med - min) / med) >= CDec(ratio) Then Return -1
             If Math.Abs((max - med) / med) >= CDec(ratio) Or Math.Abs((med - min) / med) >= CDec(ratio) Then Return 0
             Return 1
@@ -156,10 +135,10 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction(IsVolatile:=True)>
-    Public Function RandNoRepeat(bottom As Integer, top As Integer, Optional memorySet As Integer = 0, Optional memories As Integer = 30, Optional unrepeatPossibility As Integer = 0.95) As ExcelNumber
-        Static memory As New Helper.ValueCircularListCollection(1024, 1024, Nothing)
-        Static randomer As Random
-        randomer = New Random(Now.Millisecond)
+    Public Function RandNoRepeat(bottom As Integer, top As Integer, Optional memorySet As Integer = 0, Optional memories As Integer = 30, Optional unrepeatPossibility As Integer = 0.99) As ExcelNumber
+        Static memory As New ValueCircularListCollection(1024, 1024, Nothing)
+        Dim x = memory
+        Static randomer As New Random(Now.Millisecond), randomer2 As New Random(Now.Millisecond And Now.Millisecond)
         If top - bottom < 2 Then Return bottom
         If memories < 2 Then memories = 2
         If memories > memory.ListCapacity Then memories = memory.ListCapacity
@@ -173,7 +152,7 @@ Public Module UtilityFunctions
             f = True
             result = randomer.Next(bottom, top)
             For i = -memories + 1 To 0
-                If memory(memorySet)(i) IsNot Nothing AndAlso memory(memorySet)(i) = result Then If randomer.Next(0, 1000) / 1000 < unrepeatPossibility Then f = False
+                If memory(memorySet)(i) IsNot Nothing AndAlso memory(memorySet)(i) = result Then If randomer2.Next(0, 1000) / 1000 > unrepeatPossibility Then f = False
             Next
         Loop
         memory(memorySet).MoveNext(result)
@@ -184,14 +163,14 @@ Public Module UtilityFunctions
     Public Function PageLocalize(<ExcelArgument(AllowReference:=True)> r As ExcelRange, pageRowsCount As Integer, pageColumnsCount As Integer, locationRow As Integer, locationColumn As Integer, pageIndex As Integer) As ExcelVariant
         Dim _Range As Excel.Range = ConvertToRange(r)
         If _Range Is Nothing Then Return ExcelErrorNa
-        If (locationRow > pageRowsCount Or locationRow < 1 Or locationColumn > pageColumnsCount Or locationColumn < 1) Or
-        (pageRowsCount > _Range.Rows.Count Or pageRowsCount < 1 Or pageColumnsCount > _Range.Columns.Count Or pageColumnsCount < 1) Then _
-            Return Nothing
+        If Not (New CloseInterval2(Of Integer)(1, 1, pageRowsCount, pageColumnsCount).Contains(locationRow, locationColumn) And
+                New CloseInterval2(Of Integer)(1, 1, _Range.Rows.Count, _Range.Columns.Count).Contains(pageRowsCount, pageColumnsCount)) Then _
+           Return Nothing
         Dim pageCount, pageCountInRow, pageCountInColumn As Integer
         pageCountInRow = _Range.Rows.Count \ pageRowsCount
         pageCountInColumn = _Range.Columns.Count \ pageColumnsCount
         pageCount = pageCountInRow * pageCountInColumn
-        If pageIndex > pageCount Or pageIndex < 1 Then Return Nothing
+        If Not New CloseInterval(Of Integer)(1, pageCount).Contains(pageIndex) Then Return Nothing
         Dim pageIndexInRow, pageIndexInColumn As Integer
         pageIndex -= 1
         pageIndexInRow = pageIndex \ pageCountInColumn
@@ -259,7 +238,7 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
-    Public Function RangeToString(<ExcelArgument(AllowReference:=True)> r As ExcelRange) As String
+    Public Function RangeText(<ExcelArgument(AllowReference:=True)> r As ExcelRange) As String
         Dim _Range As Excel.Range = ConvertToRange(r)
         _Range(1, 1).Calculate
         Return _Range(1, 1).Text
@@ -276,22 +255,21 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
-    Public Function DataFitter(formula As String, <MarshalAs(UnmanagedType.Currency)> formulaResult As Decimal, variantIndexToReturn As Integer, <ExcelArgument(AllowReference:=True)> rMinValues As ExcelRange, <ExcelArgument(AllowReference:=True)> rMaxValues As ExcelRange, <ExcelArgument(AllowReference:=True)> rSteps As ExcelRange, Optional isForceRecalculating As Boolean = False) As ExcelNumber
+    Public Function DataFitter(formula As String, <MarshalAs(UnmanagedType.Currency)> formulaResult As Decimal, variantIndexToReturn As Integer, minValues As ExcelVariant(,), maxValues As ExcelVariant(,), stepValues As ExcelVariant(,), Optional isForceRecalculating As Boolean = False) As ExcelNumber
         Static ResultCollection As New Dictionary(Of Integer, ExcelNumber())
 
-        Dim minValues_Range As Excel.Range = ConvertToRange(rMinValues), maxValues_Range As Excel.Range = ConvertToRange(rMaxValues), steps_Range As Excel.Range = ConvertToRange(rSteps)
-        Dim minValues() As Decimal = GetNumeric(minValues_Range)
-        Dim maxValues() As Decimal = GetNumeric(maxValues_Range)
-        Dim steps() As Decimal = GetNumeric(steps_Range)
-        Dim valuesCount As Integer = Min(minValues.Count, maxValues.Count, steps.Count)
+        Dim minArray = TrimNumericArray(MatrixToArray(minValues))
+        Dim maxArray = TrimNumericArray(MatrixToArray(maxValues))
+        Dim stepArray = TrimNumericArray(MatrixToArray(stepValues))
+        Dim valuesCount As Integer = Min(minArray.Count, maxArray.Count, stepArray.Count)
         If variantIndexToReturn > valuesCount Then Return ExcelErrorNa
         Dim fittedValues(valuesCount - 1) As ExcelNumber
         For i = 0 To valuesCount - 1
-            fittedValues(i) = minValues(i)
+            fittedValues(i) = minArray(i)
         Next
 
         For i = 0 To valuesCount - 1
-            If steps(i) < 0 Or maxValues(i) - minValues(i) < steps(i) Then Return ExcelErrorValue
+            If stepArray(i) < 0 Or maxArray(i) - minArray(i) < stepArray(i) Then Return ExcelErrorValue
         Next
 
         Dim info As New Text.StringBuilder
@@ -305,16 +283,16 @@ Public Module UtilityFunctions
             info.Append("$$")
             info.Append(i + 1)
             info.Append("=")
-            info.Append(minValues(i))
+            info.Append(minArray(i))
             info.Append("-")
-            info.Append(maxValues(i))
+            info.Append(maxArray(i))
             info.Append("|")
-            info.Append(steps(i))
+            info.Append(stepArray(i))
             If i <> valuesCount - 1 Then info.Append(",")
         Next
         info.Append("}.")
 
-        Dim argumentsHash As Integer = formula.GetHashCode Xor formulaResult.GetHashCode Xor GetNumericArrayHash(minValues) Xor GetNumericArrayHash(maxValues) Xor GetNumericArrayHash(steps)
+        Dim argumentsHash As Integer = formula.GetHashCode Xor formulaResult.GetHashCode Xor GetNumericArrayHash(minArray) Xor GetNumericArrayHash(maxArray) Xor GetNumericArrayHash(stepArray)
         If ResultCollection.ContainsKey(argumentsHash) And Not isForceRecalculating Then Return ResultCollection(argumentsHash)(variantIndexToReturn - 1)
 
         Dim w As New WattingWindow(info.ToString)
@@ -338,12 +316,12 @@ Public Module UtilityFunctions
                                              End If
                                          End If
                                          For i = 0 To valuesCount - 1
-                                             fittedValues(i) = fittedValues(i) + steps(i)
-                                             If fittedValues.Last > maxValues(valuesCount - 1) Then
+                                             fittedValues(i) = fittedValues(i) + stepArray(i)
+                                             If fittedValues.Last > maxArray(valuesCount - 1) Then
                                                  f = False
                                                  Exit For
                                              End If
-                                             If fittedValues(i) <= maxValues(i) Then Exit For Else fittedValues(i) = minValues(i)
+                                             If fittedValues(i) <= maxArray(i) Then Exit For Else fittedValues(i) = minArray(i)
                                          Next
                                      Loop
                                      If Not f Then
@@ -361,36 +339,41 @@ Public Module UtilityFunctions
     Public Function RegExFind(text As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelNumber
         Dim e As New Text.RegularExpressions.Regex(pattern, If(isCaseIgnore, System.Text.RegularExpressions.RegexOptions.IgnoreCase, System.Text.RegularExpressions.RegexOptions.None))
         Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(text)
-        If m.Count <= index Then Return -1 Else Return m(index - 1).Index + 1
+        If m.Count <= index Then Return -1 Else Return IrregularValueHandler(m(index - 1).Index + 1)
     End Function
 
     <ExcelFunction>
     Public Function RegExMatch(text As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelString
         Dim e As New Text.RegularExpressions.Regex(pattern, If(isCaseIgnore, System.Text.RegularExpressions.RegexOptions.IgnoreCase, System.Text.RegularExpressions.RegexOptions.None))
         Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(text)
-        If m.Count <= index Then Return ExcelErrorNull Else Return m(index).Value
+        If m.Count <= index Then Return ExcelErrorNull Else Return IrregularValueHandler(m(index).Value)
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
-    Public Function RelativeReference(worksheetName As String, rangeText As String, Optional path As String = "") As ExcelRange
-        Static memory As New Helper.CircularList(Of (Path As String, Workbook As Workbook))(1024)
+    Public Function RelativeReference(Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "") As ExcelRange
         Dim wb As Workbook = Nothing
         If path = "" Then
-            wb = Application.ThisWorkbook
+            Try
+                wb = Application.ThisWorkbook
+            Catch ex As COMException
+                wb = Application.ActiveWorkbook
+            End Try
         Else
-            Dim f As Boolean = False
-            For Each i In memory
-                If i.Path = path Then
-                    wb = i.Workbook
-                    f = True
-                    Exit For
+            If IO.File.Exists(path) Then
+                Dim wbc = From currentWb As Workbook In Application.Workbooks Where currentWb.Name = path.Split("\").Last Select currentWb
+                If wbc.Count > 0 Then
+                    wb = wbc.First
+                    If wb.FullName <> path Then Return ExcelErrorNa
+                Else
+                    wb = Application.Workbooks.Open(path)
+                    For Each i As Window In wb.Windows
+                        i.Visible = False
+                    Next
                 End If
-            Next
-            If Not f Then
-                If IO.File.Exists(path) Then wb = Application.Workbooks.Open(path) Else Return ExcelErrorNa
-                memory.MoveNext((path, wb))
+            Else Return ExcelErrorNa
             End If
         End If
+        If worksheetName = "" Then Return ConvertToExcelReference(wb.Worksheets(1).Range(rangeText))
         For Each i As Worksheet In wb.Worksheets
             If i.Name = worksheetName Then Return ConvertToExcelReference(i.Range(rangeText))
         Next
@@ -403,64 +386,68 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
-    Public Function VLookUpByRank(<ExcelArgument(AllowReference:=True)> r As ExcelRange, rank As Integer, rankColumn As Integer, lookupColumn As Integer) As ExcelVariant
-        Dim _Range As Excel.Range = ConvertToRange(r)
-        If _Range.Columns.Count < rankColumn Or _Range.Columns.Count < lookupColumn Or rankColumn < 1 Or lookupColumn < 1 Then Return ExcelErrorRef
-        Dim ranktable As New Dictionary(Of Integer, ExcelVariant)
-        For i = 1 To _Range.Rows.Count
-            ranktable.Add(i, _Range(i, rankColumn).value)
+    Public Function VLookUpByRank(value As ExcelVariant(,), rank As Integer, rankColumn As Integer, lookupColumn As Integer) As ExcelVariant
+        If value.GetLength(1) < rankColumn Or value.GetLength(1) < lookupColumn Or rankColumn < 1 Or lookupColumn < 1 Then Return ExcelErrorRef
+        Dim rankTable As New Dictionary(Of Integer, ExcelVariant)
+        For i = 0 To value.GetLength(0) - 1
+            rankTable.Add(i, value(i, rankColumn).value)
         Next
         'Bad sorting implementation, will be rewrite.
-        For i = 1 To _Range.Rows.Count
-            For j = 1 To _Range.Rows.Count - 1
-                If IsError(ranktable(j)) Or Application.WorksheetFunction.isblank(ranktable(j)) Then
-                    Call Swap(ranktable.Values(j), ranktable.Values(j + 1))
-                    Call Swap(ranktable.Keys(j), ranktable.Keys(j + 1))
-                ElseIf IsError(ranktable(j + 1)) Then
-                ElseIf ranktable(j) > ranktable(j + 1) Then
-                    Call Swap(ranktable.Values(j), ranktable.Values(j + 1))
-                    Call Swap(ranktable.Keys(j), ranktable.Keys(j + 1))
+        For i = 0 To value.GetLength(0) - 1
+            For j = 0 To value.GetLength(0) - 2
+                If IsError(rankTable(j)) Or Application.WorksheetFunction.isblank(rankTable(j)) Then
+                    Swap(rankTable.Values(j), rankTable.Values(j + 1))
+                    Swap(rankTable.Keys(j), rankTable.Keys(j + 1))
+                ElseIf IsError(rankTable(j + 1)) Then
+                ElseIf rankTable(j) > rankTable(j + 1) Then
+                    Swap(rankTable.Values(j), rankTable.Values(j + 1))
+                    Swap(rankTable.Keys(j), rankTable.Keys(j + 1))
                 End If
             Next
         Next
-        Return _Range(ranktable.Keys(rank), lookupColumn).Value
+        Return value(rankTable.Keys(rank), lookupColumn).Value
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
-    Public Function HLookUpByRank(<ExcelArgument(AllowReference:=True)> r As ExcelRange, rank As Integer, rankRow As Integer, lookupRow As Integer) As ExcelVariant
-        Dim _Range As Excel.Range = ConvertToRange(r)
-        If _Range.Rows.Count < rankRow Or _Range.Rows.Count < lookupRow Or rankRow < 1 Or lookupRow < 1 Then Return ExcelErrorRef
-        Dim ranktable As New Dictionary(Of Integer, ExcelVariant)
-        For i = 1 To _Range.Columns.Count
-            ranktable.Add(i, _Range(i, rankRow).value)
+    Public Function HLookUpByRank(value As ExcelVariant(,), rank As Integer, rankRow As Integer, lookupRow As Integer) As ExcelVariant
+        If value.GetLength(0) < rankRow Or value.GetLength(0) < lookupRow Or rankRow < 1 Or lookupRow < 1 Then Return ExcelErrorRef
+        Dim rankTable As New Dictionary(Of Integer, ExcelVariant)
+        For i = 1 To value.GetLength(1)
+            rankTable.Add(i, value(rankRow, i).value)
         Next
         'Bad sorting implementation, will be rewrite.
-        For i = 1 To _Range.Rows.Count
-            For j = 1 To _Range.Rows.Count - 1
-                If IsError(ranktable(j)) Or Application.WorksheetFunction.isblank(ranktable(j)) Then
-                    Call Swap(ranktable.Values(j), ranktable.Values(j + 1))
-                    Call Swap(ranktable.Keys(j), ranktable.Keys(j + 1))
-                ElseIf IsError(ranktable(j + 1)) Then
-                ElseIf ranktable(j) > ranktable(j + 1) Then
-                    Call Swap(ranktable.Values(j), ranktable.Values(j + 1))
-                    Call Swap(ranktable.Keys(j), ranktable.Keys(j + 1))
+        For i = 0 To value.GetLength(1) - 1
+            For j = 0 To value.GetLength(1) - 2
+                If IsError(rankTable(j)) Or Application.WorksheetFunction.isblank(rankTable(j)) Then
+                    Swap(rankTable.Values(j), rankTable.Values(j + 1))
+                    Swap(rankTable.Keys(j), rankTable.Keys(j + 1))
+                ElseIf IsError(rankTable(j + 1)) Then
+                ElseIf rankTable(j) > rankTable(j + 1) Then
+                    Swap(rankTable.Values(j), rankTable.Values(j + 1))
+                    Swap(rankTable.Keys(j), rankTable.Keys(j + 1))
                 End If
             Next
         Next
-        Return _Range(lookupRow, ranktable.Keys(rank)).Value
+        Return value(lookupRow, rankTable.Keys(rank)).Value
     End Function
 
     <ExcelFunction>
-    Public Function Contents(array As ExcelVariant, searching As ExcelVariant) As ExcelLogical
-        If IsArray(array) Then
-            For Each i In array
-                If searching Is array Then
+    Public Function Contains(arg As ExcelVariant, searching As ExcelVariant) As ExcelLogical
+        If IsArray(arg) AndAlso arg.Count > 1 Then
+            For Each i In arg
+                If searching Is arg Then
                     Dim j As Integer = LBound(searching)
                     If i = searching(j) Then Return True
                 Else
                     If i = searching Then Return True
                 End If
             Next
+        Else
+            Try
+                If IsArray(arg) Then Return arg(0).Contains(searching) Else Return arg.Contains(searching)
+            Catch ex As Exception
+                Return ExcelErrorValue
+            End Try
         End If
         Return False
     End Function
@@ -478,7 +465,7 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction>
-    Public Function MinIndex(ParamArray args() As ExcelVariant) As ExcelNumber
+    Public Function MinIndex(ParamArray args As ExcelVariant()) As ExcelNumber
         If Not IsArray(args) Then Return 0
         Dim min As Double = Double.MinValue
         Dim result As Integer
@@ -494,7 +481,7 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction>
-    Public Function MaxIndex(ParamArray args() As ExcelVariant) As ExcelNumber
+    Public Function MaxIndex(ParamArray args As ExcelVariant()) As ExcelNumber
         If Not IsArray(args) Then Return 0
         Dim max As Double = Double.MaxValue
         Dim result As Integer
@@ -543,13 +530,13 @@ Public Module UtilityFunctions
             RemoveObject(attachedObjects(r1st.Address), ws.Name, True)
             attachedObjects.Remove(r1st.Address)
         Loop
-        If _Range.Worksheet.GetHashCode <> Application.ActiveSheet.GetHashCode Then Return "HANGED"
+        If _Range.Worksheet.GetHashCode <> Application.ActiveSheet.GetHashCode Then If attachedObjects.Count > 0 Then Return 0 Else Return "HANGED"
 
         Dim t As Shape = Nothing
         Dim f As Boolean = False
         For Each t In ws.Shapes
             If t.Name = textBoxName Then
-                If t.Type <> Microsoft.Office.Core.MsoShapeType.msoTextBox Then Resume Next
+                If t.Type <> Microsoft.Office.Core.MsoShapeType.msoTextBox Then Continue For
                 f = True
                 Exit For
             End If
@@ -558,7 +545,11 @@ Public Module UtilityFunctions
         Dim nName = t.Name & "_" & Guid(True)
         Dim nt As Excel.Shape
         Dim textBoxScale As Double = 1
-        If Not (t.Width <= r1st.MergeArea.Width And t.Height <= r1st.MergeArea.Height) Then textBoxScale = Min(r1st.MergeArea.Width / t.Width, r1st.MergeArea.Height / t.Height)
+        Try
+            If Not (t.Width <= r1st.MergeArea.Width And t.Height <= r1st.MergeArea.Height) Then textBoxScale = Min(r1st.MergeArea.Width / t.Width, r1st.MergeArea.Height / t.Height)
+        Catch ex As AccessViolationException
+            textBoxScale = 1
+        End Try
 
         nt = ws.Shapes.AddTextbox(t.TextFrame2.Orientation, 0, 0, 0, 0)
 
@@ -603,6 +594,7 @@ Public Module UtilityFunctions
         For Each s In ws.Shapes
             If s.Name = objectName Then
                 s.Delete()
+                s = Nothing
                 f = True
                 If Not continued Then Exit For
             End If
@@ -613,6 +605,12 @@ Public Module UtilityFunctions
     <ExcelFunction>
     Public Function CrLf() As ExcelString
         Return Chr(13) & Chr(10)
+    End Function
+
+    <ExcelFunction(IsMacroType:=True)>
+    Public Function Dir(<ExcelArgument(AllowReference:=True)> Optional r As ExcelRange = Nothing) As ExcelString
+        If r Is Nothing Then Return Application.ActiveWorkbook.Path & "\"
+        Return ConvertToRange(r).Worksheet.Parent.Path & "\"
     End Function
 
     'Questionable
@@ -639,7 +637,7 @@ Public Module UtilityFunctions
     '        For i = LBound(macros) To UBound(macros)
     '            f = Replace(f, "$$" & m, macros(i))
     '        Next
-    '        Return Application.Run(f)
+    '        Return Application.Evaluate(f)             '?????????????????????
     '    Else
     '        Return ExcelErrorName
     '    End If

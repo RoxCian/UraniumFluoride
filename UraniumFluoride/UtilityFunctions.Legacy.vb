@@ -21,16 +21,16 @@ Partial Public Module UtilityFunctions
         Return BankerRound(num, pre, True)
     End Function
     <ExcelFunction(Description:="Average of a group of numbers without element which is 10% to mean value, for compatibility of old formulas and codes", IsVolatile:=True, IsMacroType:=True)>
-    Public Function AVERAGE10(<ExcelArgument(AllowReference:=True)> nums As ExcelRange) As ExcelNumber
-        Return AverageByMean(nums)
+    Public Function AVERAGE10(<ExcelArgument(AllowReference:=True)> num As ExcelVariant(,)) As ExcelNumber
+        Return AverageByMean(num)
     End Function
     <ExcelFunction(IsMacroType:=True)>
-    Public Function CHECKER10(<ExcelArgument(AllowReference:=True)> nums As ExcelRange) As ExcelNumber
-        Return VerifyByMean(nums)
+    Public Function CHECKER10(<ExcelArgument(AllowReference:=True)> num As ExcelVariant(,)) As ExcelNumber
+        Return VerifyByMean(num)
     End Function
     <ExcelFunction(IsMacroType:=True)>
-    Public Function AVERAGE15BYMEDIAN(<ExcelArgument(AllowReference:=True)> nums As ExcelRange) As ExcelNumber
-        Return AverageByMedian(nums)
+    Public Function AVERAGE15BYMEDIAN(<ExcelArgument(AllowReference:=True)> num As ExcelVariant(,)) As ExcelNumber
+        Return AverageByMedian(num)
     End Function
     <ExcelFunction(IsMacroType:=True, IsVolatile:=True)>
     Public Function PAGELOCALIZER(<ExcelArgument(AllowReference:=True)> r As ExcelRange, pageRowsCount As Integer, pageColumnsCount As Integer, locationRow As Integer, locationColumn As Integer, index As Integer) As ExcelVariant
@@ -46,7 +46,7 @@ Partial Public Module UtilityFunctions
     End Function
     <ExcelFunction(IsMacroType:=True)>
     Public Function FILERELATIVEREFERENCE(workbookPath As String, Optional worksheetName As String = "", Optional rangeText As String = "A1") As ExcelRange
-        Return ConvertToExcelReference(RelativeReference(worksheetName, rangeText, workbookPath))
+        Return ConvertToExcelReference(RelativeReference(rangeText, workbookPath, worksheetName))
     End Function
     <ExcelFunction>
     Public Function STRINGCOUNT(s As String, p As String) As Integer

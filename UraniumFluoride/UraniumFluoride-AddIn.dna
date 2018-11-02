@@ -2,9 +2,9 @@
 <DnaLibrary Name="Uranium Fluoride Add-In" RuntimeVersion="v4.0" xmlns="http://schemas.excel-dna.net/addin/2018/05/dnalibrary">
   <ExternalLibrary Path="UraniumFluoride.dll" ComServer="false" ExplicitRegistration="true" LoadFromBytes="true" Pack="true" />
 	
+  <Reference Path="ExcelDna.Integration.dll" Pack="true" />
   <Reference Path="ExcelDna.Registration.dll" Pack="true" />
   <Reference Path="ExcelDna.Registration.VisualBasic.dll" Pack="true" />
-  <Reference Path="ExcelDna.Integration.dll" Pack="true" />
   <Reference Path="System.ValueTuple.dll" Pack="true" />
   <!--
        The RuntimeVersion attribute above allows two settings:

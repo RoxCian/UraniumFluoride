@@ -39,6 +39,7 @@
     <RegisterForComInterop>false</RegisterForComInterop>
     <WarningsAsErrors>
     </WarningsAsErrors>
+    <RemoveIntegerChecks>true</RemoveIntegerChecks>
   </PropertyGroup>
   <PropertyGroup>
     <OptionExplicit>On</OptionExplicit>
@@ -55,7 +56,7 @@
   <ItemGroup>
     <Reference Include="ExcelDna.Integration, Version=0.35.6734.33589, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\ExcelDna.Integration.0.35.4-beta4\lib\ExcelDna.Integration.dll</HintPath>
-      <Private>False</Private>
+      <Private>True</Private>
     </Reference>
     <Reference Include="ExcelDna.Registration, Version=0.34.6455.41786, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\ExcelDna.Registration.0.34.7\lib\net40\ExcelDna.Registration.dll</HintPath>
@@ -169,4 +170,7 @@
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\ExcelDna.AddIn.0.35.4-beta4\build\ExcelDna.AddIn.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\ExcelDna.AddIn.0.35.4-beta4\build\ExcelDna.AddIn.targets'))" />
   </Target>
+  <PropertyGroup>
+    <PostBuildEvent>copy $(TargetDir)UraniumFluoride-AddIn-x86-packed.xll C:\Users\Administrator\AppData\Roaming\Microsoft\AddIns</PostBuildEvent>
+  </PropertyGroup>
 </Project>

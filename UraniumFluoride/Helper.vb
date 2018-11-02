@@ -58,7 +58,7 @@ Namespace Helper
                 Dim valueInRange As Integer = value - Math.Floor(value / Capacity) * Capacity
                 If Me.Count < Me.Capacity AndAlso valueInRange > Me.Count Then
                     For i = Me.Count - 1 To valueInRange
-                        Me._IsValued(i) = True
+                        If Not Me._ValuedIndex.Contains(i) Then Me._ValuedIndex.Add(i)
                     Next
                 End If
                 Me._AbsolutePointerIndex = valueInRange
@@ -70,16 +70,12 @@ Namespace Helper
             End Get
             Set(value As T)
                 MyBase.Item(AbsolutePointerIndex) = value
-                Me._IsValued(AbsolutePointerIndex) = True
+                If Not Me._ValuedIndex.Contains(AbsolutePointerIndex) Then Me._ValuedIndex.Add(AbsolutePointerIndex)
             End Set
         End Property
         Public Overloads ReadOnly Property Count As Integer
             Get
-                Dim r As Integer
-                For i = 0 To Me.Capacity - 1
-                    If Me._IsValued(i) Then r += 1
-                Next
-                Return r
+                Return Me._ValuedIndex.Count
             End Get
         End Property
         Public Overloads ReadOnly Property Capacity As Integer
@@ -94,7 +90,7 @@ Namespace Helper
             End Get
         End Property
         Dim _AbsolutePointerIndex As Integer = 0
-        Dim _IsValued As New List(Of Boolean)(Me.Capacity)
+        Dim _ValuedIndex As New List(Of Integer)(Me.Capacity)
 
         Private Sub New()
             MyBase.New()
@@ -103,7 +99,6 @@ Namespace Helper
             MyBase.New(capacity)
             For i = 0 To capacity - 1
                 MyBase.Add(Nothing)
-                Me._IsValued.Add(False)
             Next
             Me.Capacity = capacity
         End Sub
@@ -111,7 +106,6 @@ Namespace Helper
             MyBase.New(capacity)
             For i = 0 To capacity - 1
                 MyBase.Add(value)
-                Me._IsValued.Add(False)
             Next
             Me.Capacity = capacity
         End Sub
@@ -135,10 +129,10 @@ Namespace Helper
         End Function
 
         Public Sub MoveNext()
-            If Me._IsValued(Me.AbsolutePointerIndex) Then Me.AbsolutePointerIndex += 1
+            If Me._ValuedIndex.Contains(Me.AbsolutePointerIndex) Then Me.AbsolutePointerIndex += 1
         End Sub
         Public Sub MovePrevious()
-            Me._AbsolutePointerIndex -= 1
+            Me.AbsolutePointerIndex -= 1
         End Sub
         Public Sub MoveNext(current As T)
             Me.Current = current
@@ -167,5 +161,60 @@ Namespace Helper
     Public Class SortingExcelCollection
         'Incompleted
     End Class
+
+    Public Structure OpenInterval(Of T As IComparable(Of T))
+        Public ReadOnly Property Left As T
+        Public ReadOnly Property Right As T
+        Public Sub New(left As T, right As T)
+
+            Me.Left = left
+            Me.Right = right
+        End Sub
+        Public Function Contains(value As T) As Boolean
+            Return value.CompareTo(Me.Left) > 0 And value.CompareTo(Me.Right) < 0
+        End Function
+    End Structure
+    Public Structure CloseInterval(Of T As IComparable(Of T))
+        Public ReadOnly Property Left As T
+        Public ReadOnly Property Right As T
+        Public Sub New(left As T, right As T)
+
+            Me.Left = left
+            Me.Right = right
+        End Sub
+        Public Function Contains(value As T) As Boolean
+            Return value.CompareTo(Me.Left) >= 0 And value.CompareTo(Me.Right) <= 0
+        End Function
+    End Structure
+    Public Structure OpenInterval2(Of T As IComparable(Of T))
+        Public ReadOnly Property Left As T
+        Public ReadOnly Property Right As T
+        Public ReadOnly Property Top As T
+        Public ReadOnly Property Bottom As T
+        Public Sub New(left As T, top As T, right As T, bottom As T)
+            Me.Left = left
+            Me.Right = right
+            Me.Top = top
+            Me.Bottom = bottom
+        End Sub
+        Public Function Contains(x As T, y As T) As Boolean
+            Return x.CompareTo(Me.Left) > 0 And x.CompareTo(Me.Right) < 0 And y.CompareTo(Me.Top) > 0 And y.CompareTo(Me.Bottom) < 0
+        End Function
+    End Structure
+    Public Structure CloseInterval2(Of T As IComparable(Of T))
+        Public ReadOnly Property Left As T
+        Public ReadOnly Property Right As T
+        Public ReadOnly Property Top As T
+        Public ReadOnly Property Bottom As T
+        Public Sub New(left As T, top As T, right As T, bottom As T)
+            Me.Left = left
+            Me.Right = right
+            Me.Top = top
+            Me.Bottom = bottom
+        End Sub
+        Public Function Contains(x As T, y As T) As Boolean
+            Return x.CompareTo(Me.Left) >= 0 And x.CompareTo(Me.Right) <= 0 And y.CompareTo(Me.Top) >= 0 And y.CompareTo(Me.Bottom) <= 0
+        End Function
+    End Structure
 #End Region
 End Namespace

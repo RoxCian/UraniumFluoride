@@ -25,8 +25,29 @@ Partial Public Module UtilityFunctions
 #Region "Internal implementation of some excel functions"
     Public Function TrimRange(r As ExcelRange) As Excel.Range
         Dim _Range As Excel.Range = ConvertToRange(r)
-        Return Application.Intersect(_Range, _Range.Worksheet.UsedRange)
+        Try
+            Return Application.Intersect(_Range, _Range.Worksheet.UsedRange)
+        Catch ex As COMException
+            Return _Range
+        End Try
     End Function
+    Public Function TrimArray(value As ExcelVariant()) As ExcelVariant()
+        Static result As New List(Of ExcelVariant)
+        For Each i In value
+            If TypeOf i IsNot ExcelEmpty Then result.Add(i)
+        Next
+        TrimArray = result.ToArray
+        result.Clear()
+    End Function
+    Public Function TrimNumericArray(value As ExcelVariant()) As ExcelVariant()
+        Static result As New List(Of ExcelVariant)
+        For Each i In value
+            If IsNumeric(i) Then result.Add(i) Else If IsDate(i) Then result.Add(CDate(i).ToOADate)
+        Next
+        TrimNumericArray = result.ToArray
+        result.Clear()
+    End Function
+
     Public Function RangeToArray(<ExcelArgument(AllowReference:=True)> r As ExcelRange) As ExcelVariant()
         Dim _Range As Excel.Range = TrimRange(r)
         Dim result(_Range.Count - 1) As ExcelVariant
@@ -50,6 +71,17 @@ Partial Public Module UtilityFunctions
         Next
         Return result
     End Function
+    Public Function MatrixToArray(value As ExcelVariant(,)) As ExcelVariant()
+        Static result As New List(Of ExcelVariant)
+        For i = 0 To value.GetLength(0) - 1
+            For j = 0 To value.GetLength(1) - 1
+                result.Add(value(i, j))
+            Next
+        Next
+        MatrixToArray = result.ToArray
+        result.Clear()
+    End Function
+
     Public Function Min(r As Excel.Range) As <MarshalAs(UnmanagedType.Currency)> Decimal
         Return Min(RangeToArray(r))
     End Function
@@ -97,7 +129,7 @@ Partial Public Module UtilityFunctions
     Public Function Count(ParamArray value()) As Integer
         Dim result As Integer
         For Each i In value
-            If IsNumeric(i) Or IsDate(i) Then result += 1
+            If Not IsBlank(i) And Not IsError(i) And (IsDate(i) Or IsNumeric(i)) Then result += 1
         Next
         Return result
     End Function
@@ -112,10 +144,12 @@ Partial Public Module UtilityFunctions
         Return result
     End Function
     Public Function Average(r As ExcelRange) As Decimal
-        If Count(r) = 0 Then Return 0 Else Return Sum(r) / Count(r)
+        Dim c = Count(r)
+        If c = 0 Then Return 0 Else Return Sum(r) / c
     End Function
     Public Function Average(ParamArray value()) As <MarshalAs(UnmanagedType.Currency)> Decimal
-        Return Sum(value) / Count(value)
+        Dim c = Count(value)
+        If c = 0 Then Return 0 Else Return Sum(value) / c
     End Function
     Public Function GetNumeric(r As ExcelRange) As Decimal()
         Return GetNumeric(RangeToArray(r))
@@ -136,6 +170,18 @@ Partial Public Module UtilityFunctions
             result = result Xor i.GetHashCode
         Next
         Return result
+    End Function
+    Public Function IsBlank(value) As Boolean
+        If IsNumeric(value) Then Return value = 0
+        If IsDate(value) Then Return value = New Date("1899/12/31")
+        If TypeOf value Is Range Then Return Application.WorksheetFunction.IsBlank(value)
+        If TypeOf value Is ExcelDna.Integration.ExcelEmpty Then Return True
+        Return False
+    End Function
+    Public Function IsError(value) As Boolean
+        If TypeOf value Is Range Then Return Application.WorksheetFunction.IsError(value)
+        If TypeOf value Is ExcelDna.Integration.ExcelError Then Return True
+        Return False
     End Function
     Private Function GetShape(shapeName As String, Optional worksheetName As String = "") As Shape
         Dim ws As Worksheet = Nothing
@@ -159,88 +205,6 @@ Partial Public Module UtilityFunctions
             End If
         Next
         If f Then Return s Else Return Nothing
-    End Function
-#End Region
-
-#Region "Declaration for clipboard functions"
-    Private Declare Auto Function SetClipboardData Lib "user32" (format As UInteger, hData As IntPtr) As IntPtr
-    Private Declare Auto Function EnumClipboardFormats Lib "user32" (format As UInteger) As UInteger
-    Private Declare Auto Function OpenClipboard Lib "user32" (hWndNewOwner As IntPtr) As Integer
-    Private Declare Auto Function GetClipboardData Lib "user32" (uFormat As UInteger) As IntPtr
-    Private Declare Auto Function CloseClipboard Lib "user32" () As Integer
-    Private Declare Auto Function GlobalLock Lib "kernel32" (hMem As IntPtr) As Integer
-    Private Declare Auto Function GlobalUnlock Lib "kernel32" (hMem As IntPtr) As Integer
-    Private Declare Auto Function GlobalSize Lib "kernel32" (hMem As IntPtr) As UInteger
-    Private Declare Auto Function GlobalFree Lib "kernel32" (hMem As IntPtr) As Integer
-#End Region
-
-#Region "Functions for reserve & restore clipboard"
-    Private Function ClipboardDataEntity(command As String, ParamArray args() As Object) As Dictionary(Of UInteger, Byte())
-        Static clipboardData As New Dictionary(Of UInteger, Byte())
-        Select Case command
-            Case "Save"
-                If TypeOf args(0) Is Dictionary(Of UInteger, Byte()) Then clipboardData = args(0)
-            Case "Load"
-                Return clipboardData
-            Case "Add"
-                If (TypeOf args(0) Is UInteger And TypeOf args(1) Is Byte()) AndAlso Not clipboardData.ContainsKey(args(0)) Then clipboardData.Add(args(0), args(1))
-            Case "Clear"
-                clipboardData.Clear()
-        End Select
-        Return Nothing
-    End Function
-    Private Function ReserveClipboard() As Boolean
-        Try
-            If OpenClipboard(0) < 1 Then Return False
-            ClipboardDataEntity("Clear")
-            Dim dataHandle As New IntPtr
-            Dim dataPointer As New IntPtr
-            Dim formatIndex As UInteger
-            Dim result As Boolean = False
-            Do
-                formatIndex = EnumClipboardFormats(formatIndex)
-                dataHandle = GetClipboardData(formatIndex)
-                If dataHandle <> 0 Then
-                    Dim dataSize As UInteger = GlobalSize(dataHandle)
-                    If dataSize > 0 Then
-                        Dim data(0 To dataSize - 1) As Byte
-                        dataPointer = GlobalLock(dataHandle)
-                        Marshal.Copy(dataPointer, data, 0, dataSize)
-                        GlobalUnlock(dataHandle)
-                        ClipboardDataEntity("Add", formatIndex, data)
-                        result = True
-                    End If
-                End If
-            Loop Until formatIndex = 0
-            Return result
-        Catch ex As Exception
-            Return False
-        Finally
-            CloseClipboard
-        End Try
-    End Function
-    Private Function RestoreClipboard() As Boolean
-        Try
-            If OpenClipboard(0) < 1 Then Return False
-            Dim reservedData As Dictionary(Of UInteger, Byte()) = ClipboardDataEntity("Load")
-            Dim result As Boolean = False
-            For Each i In reservedData
-                Dim dataSize As Integer = i.Value.Length
-                If dataSize > 0 Then
-                    Dim restoreHandle As IntPtr = Marshal.AllocHGlobal(dataSize)
-                    Dim restorePointer As IntPtr = GlobalLock(restoreHandle)
-                    Marshal.Copy(i.Value, 0, restorePointer, dataSize)
-                    GlobalUnlock(restorePointer)
-                    SetClipboardData(i.Key, restoreHandle)
-                    result = True
-                End If
-            Next
-            Return result
-        Catch ex As Exception
-            Return False
-        Finally
-            CloseClipboard
-        End Try
     End Function
 #End Region
 
