@@ -29,6 +29,8 @@ Partial Public Module UtilityFunctions
             Return Application.Intersect(_Range, _Range.Worksheet.UsedRange)
         Catch ex As COMException
             Return _Range
+        Catch ex As NullReferenceException
+            Return _Range
         End Try
     End Function
     Public Function TrimArray(value As ExcelVariant()) As ExcelVariant()
@@ -164,10 +166,10 @@ Partial Public Module UtilityFunctions
     Public Function GetNumericArrayHash(r As ExcelRange) As Integer
         Return GetNumericArrayHash(GetNumeric(r))
     End Function
-    Public Function GetNumericArrayHash(ParamArray value() As Decimal) As Integer
+    Public Function GetNumericArrayHash(ParamArray value() As ExcelVariant) As Integer
         Dim result As Integer = 0
         For Each i In value
-            result = result Xor i.GetHashCode
+            If IsNumeric(i) Then result = result Xor i.GetHashCode
         Next
         Return result
     End Function

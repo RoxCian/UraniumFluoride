@@ -513,24 +513,29 @@ Public Module UtilityFunctions
         End If
     End Function
 
-    <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
+    <ExcelFunction(IsVolatile:=False, IsMacroType:=True)>
     Public Function CopyTextbox(<ExcelArgument(AllowReference:=True)> r As ExcelRange, textBoxName As String, Optional removeAllRecordedTextBoxes As Boolean = False, Optional left As Double = 0, Optional top As Double = 0, Optional width As Double = 0, Optional height As Double = 0) As ExcelVariant
-        Static attachedObjects As New Dictionary(Of String, String)
+        Static attachedObjects As New Dictionary(Of String, Shape)
         Dim _Range As Excel.Range = ConvertToRange(r)
         Dim ws As Worksheet = _Range.Worksheet
         Dim r1st As Excel.Range = _Range(1, 1)
+        If Not CType(_Range.Worksheet.Parent, Workbook).FullName = Application.ActiveSheet.Parent.Fullname OrElse Not _Range.Worksheet.CodeName = Application.ActiveSheet.Codename Then If attachedObjects.ContainsKey(r1st.Address) Then Return 0 Else Return "HANGED"
         If removeAllRecordedTextBoxes Then
             For o = 0 To attachedObjects.Count - 1
-                RemoveObject(attachedObjects.Item(o), ws.Name, True)
+                attachedObjects.Item(o).Delete()
             Next
             attachedObjects.Clear()
         End If
 
         Do While attachedObjects.ContainsKey(r1st.Address)
-            RemoveObject(attachedObjects(r1st.Address), ws.Name, True)
-            attachedObjects.Remove(r1st.Address)
+            Try
+                attachedObjects(r1st.Address).Delete()
+            Catch ex As Exception
+
+            Finally
+                attachedObjects.Remove(r1st.Address)
+            End Try
         Loop
-        If _Range.Worksheet.GetHashCode <> Application.ActiveSheet.GetHashCode Then If attachedObjects.Count > 0 Then Return 0 Else Return "HANGED"
 
         Dim t As Shape = Nothing
         Dim f As Boolean = False
@@ -550,13 +555,19 @@ Public Module UtilityFunctions
         Catch ex As AccessViolationException
             textBoxScale = 1
         End Try
-
-        nt = ws.Shapes.AddTextbox(t.TextFrame2.Orientation, 0, 0, 0, 0)
-
-        attachedObjects.Add(r1st.Address, nName)
-
-        nt = t.Duplicate
-        nt.Name = nName
+        Try
+            t.Name = t.Name
+        Catch ex As COMException
+            Return "-"
+        End Try
+        Try
+            nt = t.Duplicate
+        Catch ex As Exception
+            Throw ex
+        Finally
+            nt.Name = nName
+        End Try
+        attachedObjects.Add(r1st.Address, nt)
 
         nt.TextFrame.MarginTop = 0
         nt.TextFrame.MarginBottom = 0
