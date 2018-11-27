@@ -167,28 +167,36 @@ Public Module UtilityFunctions
                 New CloseInterval2(Of Integer)(1, 1, _Range.Rows.Count, _Range.Columns.Count).Contains(pageRowsCount, pageColumnsCount)) Then _
            Return Nothing
         Dim pageCount, pageCountInRow, pageCountInColumn As Integer
-        pageCountInRow = _Range.Rows.Count \ pageRowsCount
-        pageCountInColumn = _Range.Columns.Count \ pageColumnsCount
-        pageCount = pageCountInRow * pageCountInColumn
-        If Not New CloseInterval(Of Integer)(1, pageCount).Contains(pageIndex) Then Return Nothing
-        Dim pageIndexInRow, pageIndexInColumn As Integer
-        pageIndex -= 1
-        pageIndexInRow = pageIndex \ pageCountInColumn
-        pageIndexInColumn = pageIndex Mod pageCountInColumn
-        Dim row, column As Integer
-        row = pageRowsCount * pageIndexInRow + locationRow
-        column = pageColumnsCount * pageIndexInColumn + locationColumn
-        Return _Range(row, column).Value
+        Try
+            pageCountInRow = _Range.Rows.Count \ pageRowsCount
+            pageCountInColumn = _Range.Columns.Count \ pageColumnsCount
+            pageCount = pageCountInRow * pageCountInColumn
+            If Not New CloseInterval(Of Integer)(1, pageCount).Contains(pageIndex) Then Return Nothing
+            Dim pageIndexInRow, pageIndexInColumn As Integer
+            pageIndex -= 1
+            pageIndexInRow = pageIndex \ pageCountInColumn
+            pageIndexInColumn = pageIndex Mod pageCountInColumn
+            Dim row, column As Integer
+            row = pageRowsCount * pageIndexInRow + locationRow
+            column = pageColumnsCount * pageIndexInColumn + locationColumn
+            Return _Range(row, column).Value
+        Catch ex As NullReferenceException
+            Return ExcelErrorNa
+        End Try
     End Function
 
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
     Public Function PageLocalizeAbbr(<ExcelArgument(AllowReference:=True)> rPage As ExcelRange, <ExcelArgument(AllowReference:=True)> rCell As ExcelRange, pageIndex As Integer) As ExcelVariant
         Dim page_Range As Excel.Range = ConvertToRange(rPage), cell_Range As Excel.Range = ConvertToRange(rCell)
         Dim cellRow, cellColumn, pageRow, pageColumn As Integer
-        pageRow = page_Range.Rows.Count
-        pageColumn = page_Range.Columns.Count
-        cellRow = cell_Range.Row
-        cellColumn = cell_Range.Column
+        Try
+            pageRow = page_Range.Rows.Count
+            pageColumn = page_Range.Columns.Count
+            cellRow = cell_Range.Row
+            cellColumn = cell_Range.Column
+        Catch ex As NullReferenceException
+            Return ExcelErrorNa
+        End Try
         Do Until cellRow <= pageRow
             cellRow -= pageRow
         Loop
@@ -512,17 +520,21 @@ Public Module UtilityFunctions
             Return result2.ToString
         End If
     End Function
-
+    Dim log As New Text.StringBuilder
     <ExcelFunction(IsVolatile:=False, IsMacroType:=True)>
     Public Function CopyTextbox(<ExcelArgument(AllowReference:=True)> r As ExcelRange, textBoxName As String, Optional removeAllRecordedTextBoxes As Boolean = False, Optional left As Double = 0, Optional top As Double = 0, Optional width As Double = 0, Optional height As Double = 0) As ExcelVariant
         Static attachedObjects As New Dictionary(Of String, Shape)
+        Dim x = attachedObjects
         Dim _Range As Excel.Range = ConvertToRange(r)
         Dim ws As Worksheet = _Range.Worksheet
         Dim r1st As Excel.Range = _Range(1, 1)
+        If r1st.Address = "$BM$31" Then log.Append("executed;")
         If Not CType(_Range.Worksheet.Parent, Workbook).FullName = Application.ActiveSheet.Parent.Fullname OrElse Not _Range.Worksheet.CodeName = Application.ActiveSheet.Codename Then If attachedObjects.ContainsKey(r1st.Address) Then Return 0 Else Return "HANGED"
+
         If removeAllRecordedTextBoxes Then
             For o = 0 To attachedObjects.Count - 1
-                attachedObjects.Item(o).Delete()
+                attachedObjects.Values(o).Delete()
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(attachedObjects.Values(o))
             Next
             attachedObjects.Clear()
         End If
@@ -530,9 +542,9 @@ Public Module UtilityFunctions
         Do While attachedObjects.ContainsKey(r1st.Address)
             Try
                 attachedObjects(r1st.Address).Delete()
-            Catch ex As Exception
-
+            Catch ex As COMException
             Finally
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(attachedObjects(r1st.Address))
                 attachedObjects.Remove(r1st.Address)
             End Try
         Loop
@@ -568,23 +580,40 @@ Public Module UtilityFunctions
             nt.Name = nName
         End Try
         attachedObjects.Add(r1st.Address, nt)
-
-        nt.TextFrame.MarginTop = 0
-        nt.TextFrame.MarginBottom = 0
-        nt.TextFrame.MarginLeft = 0
-        nt.TextFrame.MarginRight = 0
-        nt.TextFrame.AutoSize = False
-        nt.TextFrame.VerticalOverflow = XlOartVerticalOverflow.xlOartVerticalOverflowOverflow
-        nt.TextFrame.HorizontalOverflow = XlOartHorizontalOverflow.xlOartHorizontalOverflowOverflow
-        nt.Placement = XlPlacement.xlFreeFloating
-        nt.Line.Visible = Microsoft.Office.Core.MsoTriState.msoFalse
-        nt.Fill.Visible = Microsoft.Office.Core.MsoTriState.msoFalse
-        If width > 0 Then nt.Width = width Else nt.Width = t.Width * textBoxScale
-        If height > 0 Then nt.Height = height Else nt.Height = t.Height * textBoxScale
-        If top > 0 Then nt.Top = top Else nt.Top = r1st.MergeArea.Top + (r1st.MergeArea.Height - nt.Height) / 2
-        If left > 0 Then nt.Left = left Else nt.Left = r1st.MergeArea.Left + (r1st.MergeArea.Width - nt.Width) / 2
+        Dim timer As New Threading.Timer(Sub() Throw New TimeoutException, Nothing, 2000, Threading.Timeout.Infinite)
+        Try
+            nt.TextFrame.MarginTop = 0
+            nt.TextFrame.MarginBottom = 0
+            nt.TextFrame.MarginLeft = 0
+            nt.TextFrame.MarginRight = 0
+            nt.TextFrame.AutoSize = False
+            nt.TextFrame.VerticalOverflow = XlOartVerticalOverflow.xlOartVerticalOverflowOverflow
+            nt.TextFrame.HorizontalOverflow = XlOartHorizontalOverflow.xlOartHorizontalOverflowOverflow
+            nt.Placement = XlPlacement.xlFreeFloating
+            nt.Line.Visible = Microsoft.Office.Core.MsoTriState.msoFalse
+            nt.Fill.Visible = Microsoft.Office.Core.MsoTriState.msoFalse
+            If width > 0 Then nt.Width = width Else nt.Width = t.Width * textBoxScale
+            If height > 0 Then nt.Height = height Else nt.Height = t.Height * textBoxScale
+            If top > 0 Then nt.Top = top Else nt.Top = r1st.MergeArea.Top + (r1st.MergeArea.Height - nt.Height) / 2
+            If left > 0 Then nt.Left = left Else nt.Left = r1st.MergeArea.Left + (r1st.MergeArea.Width - nt.Width) / 2
+        Catch ex As TimeoutException
+            Return "#TIMEOUT"
+        Catch ex As Exception
+            Return ExcelErrorValue
+        Finally
+            timer.Dispose()
+        End Try
         Return 0
     End Function
+
+    Public Class TimeoutException
+        Inherits Exception
+        Public Overrides ReadOnly Property Message As String
+            Get
+                Return "Function calling timeout."
+            End Get
+        End Property
+    End Class
 
     <ExcelFunction>
     Public Function RemoveObject(objectName As String, Optional worksheetName As String = "", Optional continued As Boolean = False) As ExcelVariant
