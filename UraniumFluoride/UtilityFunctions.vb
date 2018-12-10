@@ -347,14 +347,15 @@ Public Module UtilityFunctions
     Public Function RegExFind(text As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelNumber
         Dim e As New Text.RegularExpressions.Regex(pattern, If(isCaseIgnore, System.Text.RegularExpressions.RegexOptions.IgnoreCase, System.Text.RegularExpressions.RegexOptions.None))
         Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(text)
-        If m.Count <= index Then Return -1 Else Return IrregularValueHandler(m(index - 1).Index + 1)
+        If m.Count <= index - 1 Then Return -1 Else Return m(index - 1).Index + 1
     End Function
 
     <ExcelFunction>
     Public Function RegExMatch(text As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelString
+        If index < 1 Then Return ExcelErrorNull
         Dim e As New Text.RegularExpressions.Regex(pattern, If(isCaseIgnore, System.Text.RegularExpressions.RegexOptions.IgnoreCase, System.Text.RegularExpressions.RegexOptions.None))
         Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(text)
-        If m.Count <= index Then Return ExcelErrorNull Else Return IrregularValueHandler(m(index).Value)
+        If m.Count <= index - 1 Then Return ExcelErrorNull Else Return m(index - 1).Value
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
@@ -377,6 +378,7 @@ Public Module UtilityFunctions
                     For Each i As Window In wb.Windows
                         i.Visible = False
                     Next
+                    'Return New ClosedXML.Excel.XLWorkbook(path).Range(rangeText)
                 End If
             Else Return ExcelErrorNa
             End If

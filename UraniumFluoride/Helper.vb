@@ -1,6 +1,4 @@
-﻿#Region "RandNoRepeat helper class"
-
-Namespace Helper
+﻿Namespace Helper
 
     Public Class ValueCircularListCollection
         Inherits CircularListCollection(Of Integer?)
@@ -216,5 +214,67 @@ Namespace Helper
             Return x.CompareTo(Me.Left) >= 0 And x.CompareTo(Me.Right) <= 0 And y.CompareTo(Me.Top) >= 0 And y.CompareTo(Me.Bottom) <= 0
         End Function
     End Structure
+
+    Public Class ClosedXMLWorkbookCollector
+        Shared WorkbookCollection As New Dictionary(Of String, (Workbook As ClosedXML.Excel.XLWorkbook, ReferencedCount As Integer))
+
+    End Class
+    Public Class WorkbookElement
+        Implements IDisposable
+
+        Public Const PeriodTime As Integer = 3000
+        Public ReadOnly Property Workbook As ClosedXML.Excel.XLWorkbook
+            Get
+                _ReferencedCount += 1
+                Return _Workbook
+            End Get
+        End Property
+        Private ReadOnly Property WorkbookStream As IO.Stream
+        Public ReadOnly Property ReferencedCount As Integer = 1
+        Public ReadOnly Property BeforeCollectCallback As [Delegate]
+        Public ReadOnly Property IsReadonly As Boolean
+        Private ReadOnly timer As New Threading.Timer(AddressOf Timer_Tick, Nothing, PeriodTime, PeriodTime)
+        Dim _Workbook As ClosedXML.Excel.XLWorkbook
+
+        Public Sub New(path As String, isReadonly As Boolean)
+            Me.WorkbookStream = New IO.FileStream(path, IO.FileMode.OpenOrCreate, If(isReadonly, IO.FileAccess.Read, IO.FileAccess.ReadWrite))
+            Me._Workbook = New ClosedXML.Excel.XLWorkbook(WorkbookStream)
+        End Sub
+
+        Private Sub Timer_Tick(state As Object)
+
+        End Sub
+
+#Region "IDisposable Support"
+        Private disposedValue As Boolean ' 要检测冗余调用
+
+        ' IDisposable
+        Protected Overridable Sub Dispose(disposing As Boolean)
+            If Not disposedValue Then
+                If disposing Then
+                    WorkbookStream.Close()
+                End If
+
+                ' TODO: 释放未托管资源(未托管对象)并在以下内容中替代 Finalize()。
+                ' TODO: 将大型字段设置为 null。
+            End If
+            disposedValue = True
+        End Sub
+
+        ' TODO: 仅当以上 Dispose(disposing As Boolean)拥有用于释放未托管资源的代码时才替代 Finalize()。
+        'Protected Overrides Sub Finalize()
+        '    ' 请勿更改此代码。将清理代码放入以上 Dispose(disposing As Boolean)中。
+        '    Dispose(False)
+        '    MyBase.Finalize()
+        'End Sub
+
+        ' Visual Basic 添加此代码以正确实现可释放模式。
+        Public Sub Dispose() Implements IDisposable.Dispose
+            ' 请勿更改此代码。将清理代码放入以上 Dispose(disposing As Boolean)中。
+            Dispose(True)
+            ' TODO: 如果在以上内容中替代了 Finalize()，则取消注释以下行。
+            ' GC.SuppressFinalize(Me)
+        End Sub
 #End Region
+    End Class
 End Namespace
