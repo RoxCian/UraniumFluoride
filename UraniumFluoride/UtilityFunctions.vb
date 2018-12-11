@@ -10,6 +10,7 @@ Imports ExcelLogical = System.Object
 Imports ExcelDate = System.Object
 Imports ExcelString = System.Object
 Imports ExcelVariant = System.Object
+Imports ExcelIndex = System.Int32
 #End Region
 
 Public Module UtilityFunctions
@@ -160,7 +161,7 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
-    Public Function PageLocalize(<ExcelArgument(AllowReference:=True)> r As ExcelRange, pageRowsCount As Integer, pageColumnsCount As Integer, locationRow As Integer, locationColumn As Integer, pageIndex As Integer) As ExcelVariant
+    Public Function PageLocalize(<ExcelArgument(AllowReference:=True)> r As ExcelRange, pageRowsCount As Integer, pageColumnsCount As Integer, locationRow As Integer, locationColumn As Integer, pageIndex As ExcelIndex) As ExcelVariant
         Dim _Range As Excel.Range = ConvertToRange(r)
         If _Range Is Nothing Then Return ExcelErrorNa
         If Not (New CloseInterval2(Of Integer)(1, 1, pageRowsCount, pageColumnsCount).Contains(locationRow, locationColumn) And
@@ -253,13 +254,37 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
-    Public Function MergedCellRows(<ExcelArgument(AllowReference:=True)> cell As ExcelRange)
+    Public Function MergedCellRows(<ExcelArgument(AllowReference:=True)> cell As ExcelRange) As ExcelNumber
         Return ConvertToRange(cell)(1, 1).MergeArea.Rows.Count
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
-    Public Function MergedCellColumns(<ExcelArgument(AllowReference:=True)> cell As ExcelRange)
+    Public Function MergedCellColumns(<ExcelArgument(AllowReference:=True)> cell As ExcelRange) As ExcelNumber
         Return ConvertToRange(cell)(1, 1).MergeArea.Columns.Count
+    End Function
+
+    <ExcelFunction(IsMacroType:=True)>
+    Public Function ReferencedMergedCellRows(Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "") As ExcelNumber
+        Dim r = RelativeReferenceInternal(rangeText, path, worksheetName)
+        If TypeOf r Is ClosedXML.Excel.IXLRange Then
+            Return CType(r, ClosedXML.Excel.IXLRange).CellsUsed.First.MergedRange.RowCount
+        Else
+            Dim _range As Excel.Range = ConvertToRange(r)
+            Return MergedCellRows(_range)
+        End If
+        Return ExcelErrorNull
+    End Function
+
+    <ExcelFunction(IsMacroType:=True)>
+    Public Function ReferencedMergedCellColumns(Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "") As ExcelNumber
+        Dim r = RelativeReferenceInternal(rangeText, path, worksheetName)
+        If TypeOf r Is ClosedXML.Excel.IXLRange Then
+            Return CType(r, ClosedXML.Excel.IXLRange).CellsUsed.First.MergedRange.ColumnCount
+        Else
+            Dim _range As Excel.Range = ConvertToRange(r)
+            Return MergedCellColumns(_range)
+        End If
+        Return ExcelErrorNull
     End Function
 
     <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
@@ -360,6 +385,17 @@ Public Module UtilityFunctions
 
     <ExcelFunction(IsMacroType:=True)>
     Public Function RelativeReference(Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "") As ExcelRange
+        Dim result = RelativeReferenceInternal(rangeText, path, worksheetName)
+        If TypeOf result Is ClosedXML.Excel.IXLRange Then
+            Dim r = CType(result, ClosedXML.Excel.IXLRange)
+            'If r.FirstCell.NeedsRecalculation Then r.Worksheet.RecalculateAllFormulas()
+            Return r.FirstCell.CachedValue
+        Else
+            Return result
+        End If
+    End Function
+
+    Private Function RelativeReferenceInternal(Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "") As ExcelRange
         Dim wb As Workbook = Nothing
         If path = "" Then
             Try
@@ -374,11 +410,11 @@ Public Module UtilityFunctions
                     wb = wbc.First
                     If wb.FullName <> path Then Return ExcelErrorNa
                 Else
-                    wb = Application.Workbooks.Open(path)
-                    For Each i As Window In wb.Windows
-                        i.Visible = False
+                    Dim closedWb = Helper.ClosedXMLWorkbookLibrary.Create(path)
+                    If worksheetName = "" Then Return closedWb.Worksheets(0).Range(rangeText)
+                    For Each i In closedWb.Worksheets
+                        If i.Name = worksheetName Then Return i.Range(rangeText)
                     Next
-                    'Return New ClosedXML.Excel.XLWorkbook(path).Range(rangeText)
                 End If
             Else Return ExcelErrorNa
             End If
@@ -388,6 +424,35 @@ Public Module UtilityFunctions
             If i.Name = worksheetName Then Return ConvertToExcelReference(i.Range(rangeText))
         Next
         Return ExcelErrorNa
+    End Function
+
+    <ExcelFunction>
+    Public Function ReferencedVLookUp(keyword As String, Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "", Optional targetColumn As Integer = 1, Optional isApproximateMatching As Boolean = False) As ExcelVariant
+        Dim r = RelativeReferenceInternal(rangeText, path, worksheetName)
+        If TypeOf r Is ClosedXML.Excel.IXLRange Then
+            For Each i In CType(r, ClosedXML.Excel.IXLRange).FirstColumn.CellsUsed
+                Dim t = If(TypeOf i.Value Is Date And IsNumeric(keyword), Date.FromOADate(keyword), keyword)
+                If i.Value = t Then Return CType(r, ClosedXML.Excel.IXLRange).Cell(i.Address.RowNumber, targetColumn).Value
+            Next
+        Else
+            Dim _range As Excel.Range = ConvertToRange(r)
+            Return Application.VLookup(keyword, _range, targetColumn, isApproximateMatching)
+        End If
+        Return ExcelErrorNull
+    End Function
+
+    <ExcelFunction>
+    Public Function ReferencedHLookUp(keyword As String, Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "", Optional targetRow As Integer = 1, Optional isApproximateMatching As Boolean = False) As ExcelVariant
+        Dim r = RelativeReference(rangeText, path, worksheetName)
+        If TypeOf r Is ClosedXML.Excel.IXLRange Then
+            For Each i In CType(r, ClosedXML.Excel.IXLRange).FirstRow.CellsUsed
+                If i.Value = keyword Then Return CType(r, ClosedXML.Excel.IXLRange).Cell(targetRow, i.Address.ColumnNumber).Value
+            Next
+        Else
+            Dim _range As Excel.Range = ConvertToRange(r)
+            Return Application.WorksheetFunction.HLookup(keyword, _range, targetRow, isApproximateMatching)
+        End If
+        Return ExcelErrorNull
     End Function
 
     <ExcelFunction>
@@ -578,8 +643,6 @@ Public Module UtilityFunctions
             nt = t.Duplicate
         Catch ex As Exception
             Throw ex
-        Finally
-            nt.Name = nName
         End Try
         attachedObjects.Add(r1st.Address, nt)
         Dim timer As New Threading.Timer(Sub() Throw New TimeoutException, Nothing, 2000, Threading.Timeout.Infinite)
@@ -651,8 +714,28 @@ Public Module UtilityFunctions
 
     <ExcelFunction(IsMacroType:=True)>
     Public Function Dir(<ExcelArgument(AllowReference:=True)> Optional r As ExcelRange = Nothing) As ExcelString
-        If r Is Nothing Then Return Application.ActiveWorkbook.Path & "\"
+        If TypeOf r Is ExcelDna.Integration.ExcelMissing Then Return Application.ActiveWorkbook.Path & "\"
         Return ConvertToRange(r).Worksheet.Parent.Path & "\"
+    End Function
+
+    <ExcelFunction>
+    Public Function ColumnLetter(columnNumber As Integer) As String
+        columnNumber = Math.Abs(columnNumber)
+        Dim bits(5) As Char
+        Dim i As Integer = 5
+        Do While (columnNumber - 1) \ 26 > 0
+            Dim r As Integer
+            columnNumber = Math.DivRem(columnNumber - 1, 26, r)
+            bits(i) = Chr(r + Asc("A"))
+            i -= 1
+        Loop
+        bits(i) = Chr(columnNumber + Asc("A") - 1)
+        Return New String(bits, i, 6 - i)
+    End Function
+
+    <ExcelFunction(IsMacroType:=True)>
+    Public Function StringSplit(target As String, separator As String, index As Integer) As ExcelString
+        If target.Split(separator).Count > index - 1 Then Return target.Split(separator)(index - 1) Else Return ExcelErrorNull
     End Function
 
     'Questionable

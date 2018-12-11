@@ -27,7 +27,7 @@
     <RegisterForComInterop>false</RegisterForComInterop>
     <WarningsAsErrors>
     </WarningsAsErrors>
-    <RemoveIntegerChecks>true</RemoveIntegerChecks>
+    <RemoveIntegerChecks>false</RemoveIntegerChecks>
     <Optimize>false</Optimize>
     <GenerateSerializationAssemblies>On</GenerateSerializationAssemblies>
   </PropertyGroup>

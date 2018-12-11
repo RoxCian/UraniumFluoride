@@ -56,7 +56,7 @@
                 Dim valueInRange As Integer = value - Math.Floor(value / Capacity) * Capacity
                 If Me.Count < Me.Capacity AndAlso valueInRange > Me.Count Then
                     For i = Me.Count - 1 To valueInRange
-                        If Not Me._ValuedIndex.Contains(i) Then Me._ValuedIndex.Add(i)
+                        If Not Me.ValuedIndex.Contains(i) Then Me.ValuedIndex.Add(i)
                     Next
                 End If
                 Me._AbsolutePointerIndex = valueInRange
@@ -68,12 +68,12 @@
             End Get
             Set(value As T)
                 MyBase.Item(AbsolutePointerIndex) = value
-                If Not Me._ValuedIndex.Contains(AbsolutePointerIndex) Then Me._ValuedIndex.Add(AbsolutePointerIndex)
+                If Not Me.ValuedIndex.Contains(AbsolutePointerIndex) Then Me.ValuedIndex.Add(AbsolutePointerIndex)
             End Set
         End Property
         Public Overloads ReadOnly Property Count As Integer
             Get
-                Return Me._ValuedIndex.Count
+                Return Me.ValuedIndex.Count
             End Get
         End Property
         Public Overloads ReadOnly Property Capacity As Integer
@@ -87,8 +87,9 @@
                 If Me.Count < Me.Capacity Then Return Me.Count - Me.AbsolutePointerIndex - 1 Else Return Me.Count - 1
             End Get
         End Property
+        Private Property ValuedIndex As New List(Of Integer)(Me.Capacity)
+
         Dim _AbsolutePointerIndex As Integer = 0
-        Dim _ValuedIndex As New List(Of Integer)(Me.Capacity)
 
         Private Sub New()
             MyBase.New()
@@ -127,7 +128,7 @@
         End Function
 
         Public Sub MoveNext()
-            If Me._ValuedIndex.Contains(Me.AbsolutePointerIndex) Then Me.AbsolutePointerIndex += 1
+            If Me.ValuedIndex.Contains(Me.AbsolutePointerIndex) Then Me.AbsolutePointerIndex += 1
         End Sub
         Public Sub MovePrevious()
             Me.AbsolutePointerIndex -= 1
@@ -215,66 +216,13 @@
         End Function
     End Structure
 
-    Public Class ClosedXMLWorkbookCollector
-        Shared WorkbookCollection As New Dictionary(Of String, (Workbook As ClosedXML.Excel.XLWorkbook, ReferencedCount As Integer))
-
-    End Class
-    Public Class WorkbookElement
-        Implements IDisposable
-
-        Public Const PeriodTime As Integer = 3000
-        Public ReadOnly Property Workbook As ClosedXML.Excel.XLWorkbook
-            Get
-                _ReferencedCount += 1
-                Return _Workbook
-            End Get
-        End Property
-        Private ReadOnly Property WorkbookStream As IO.Stream
-        Public ReadOnly Property ReferencedCount As Integer = 1
-        Public ReadOnly Property BeforeCollectCallback As [Delegate]
-        Public ReadOnly Property IsReadonly As Boolean
-        Private ReadOnly timer As New Threading.Timer(AddressOf Timer_Tick, Nothing, PeriodTime, PeriodTime)
-        Dim _Workbook As ClosedXML.Excel.XLWorkbook
-
-        Public Sub New(path As String, isReadonly As Boolean)
-            Me.WorkbookStream = New IO.FileStream(path, IO.FileMode.OpenOrCreate, If(isReadonly, IO.FileAccess.Read, IO.FileAccess.ReadWrite))
-            Me._Workbook = New ClosedXML.Excel.XLWorkbook(WorkbookStream)
-        End Sub
-
-        Private Sub Timer_Tick(state As Object)
-
-        End Sub
-
-#Region "IDisposable Support"
-        Private disposedValue As Boolean ' 要检测冗余调用
-
-        ' IDisposable
-        Protected Overridable Sub Dispose(disposing As Boolean)
-            If Not disposedValue Then
-                If disposing Then
-                    WorkbookStream.Close()
-                End If
-
-                ' TODO: 释放未托管资源(未托管对象)并在以下内容中替代 Finalize()。
-                ' TODO: 将大型字段设置为 null。
-            End If
-            disposedValue = True
-        End Sub
-
-        ' TODO: 仅当以上 Dispose(disposing As Boolean)拥有用于释放未托管资源的代码时才替代 Finalize()。
-        'Protected Overrides Sub Finalize()
-        '    ' 请勿更改此代码。将清理代码放入以上 Dispose(disposing As Boolean)中。
-        '    Dispose(False)
-        '    MyBase.Finalize()
-        'End Sub
-
-        ' Visual Basic 添加此代码以正确实现可释放模式。
-        Public Sub Dispose() Implements IDisposable.Dispose
-            ' 请勿更改此代码。将清理代码放入以上 Dispose(disposing As Boolean)中。
-            Dispose(True)
-            ' TODO: 如果在以上内容中替代了 Finalize()，则取消注释以下行。
-            ' GC.SuppressFinalize(Me)
-        End Sub
-#End Region
+    Public Class ClosedXMLWorkbookLibrary
+        Private Shared WorkbookCollection As New Dictionary(Of String, ClosedXML.Excel.XLWorkbook)
+        Public Shared Function Create(path As String, Optional isReadOnly As Boolean = True) As ClosedXML.Excel.XLWorkbook
+            If Not FileIO.FileSystem.FileExists(path) Then Return Nothing
+            If Not WorkbookCollection.ContainsKey(path) Then WorkbookCollection.Add(path, New ClosedXML.Excel.XLWorkbook(path, isReadOnly))
+            Return WorkbookCollection(path)
+        End Function
+        Private Sub New() : End Sub
     End Class
 End Namespace

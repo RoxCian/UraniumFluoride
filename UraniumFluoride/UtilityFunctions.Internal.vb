@@ -15,10 +15,16 @@ Partial Public Module UtilityFunctions
 
 #Region "Range converting functions"
     Public Function ConvertToRange(ref As ExcelRange) As Excel.Range
-        If TypeOf ref Is ExcelReference Then Return Application.Range(XlCall.Excel(XlCall.xlfReftext, ref, True)) Else If TypeOf ref Is Excel.Range Then Return ref Else Return Nothing
+        If TypeOf ref Is ExcelReference Then Return Application.Range(GetExcelReferenceAddress_A1(ref).TopLeft, GetExcelReferenceAddress_A1(ref).BottomRight) Else If TypeOf ref Is Excel.Range Then Return ref Else Return Nothing
     End Function
     Public Function ConvertToExcelReference(r As ExcelRange) As ExcelReference
         If TypeOf r Is Excel.Range Then Return New ExcelReference(r.Row - 1, r.Row - 1 + r.Rows.Count - 1, r.Column - 1, r.Column - 1 + r.Columns.Count - 1, CType(XlCall.Excel(XlCall.xlSheetId, "[" + r.Parent.Parent.Name + "]" + r.Worksheet.Name), ExcelReference).SheetId) Else If TypeOf r Is ExcelReference Then Return r Else Return New ExcelReference(0, 0)
+    End Function
+    Public Function GetExcelReferenceAddress_A1(ref As ExcelReference) As (TopLeft As String, BottomRight As String)
+        Dim r As (TopLeft As String, BottomRight As String)
+        r.TopLeft = ColumnLetter(ref.ColumnFirst + 1) & (ref.RowFirst + 1)
+        r.BottomRight = ColumnLetter(ref.ColumnLast + 1) & (ref.RowLast + 1)
+        Return r
     End Function
 #End Region
 
