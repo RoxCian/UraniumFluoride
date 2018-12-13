@@ -153,7 +153,7 @@ Public Module UtilityFunctions
             f = True
             result = randomer.Next(bottom, top)
             For i = -memories + 1 To 0
-                If memory(memorySet)(i) IsNot Nothing AndAlso memory(memorySet)(i) = result Then If randomer2.Next(0, 1000) / 1000 > unrepeatPossibility Then f = False
+                If memory(memorySet)(i) IsNot Nothing AndAlso memory(memorySet)(i) = result Then If randomer2.Next(0, 1000) / 1000 < unrepeatPossibility Then f = False
             Next
         Loop
         memory(memorySet).MoveNext(result)
@@ -391,7 +391,7 @@ Public Module UtilityFunctions
             'If r.FirstCell.NeedsRecalculation Then r.Worksheet.RecalculateAllFormulas()
             Return r.FirstCell.CachedValue
         Else
-            Return result
+            Return ConvertToExcelReference(result)
         End If
     End Function
 
@@ -419,38 +419,36 @@ Public Module UtilityFunctions
             Else Return ExcelErrorNa
             End If
         End If
-        If worksheetName = "" Then Return ConvertToExcelReference(wb.Worksheets(1).Range(rangeText))
+        If worksheetName = "" Then Return wb.Worksheets(1).Range(rangeText)
         For Each i As Worksheet In wb.Worksheets
-            If i.Name = worksheetName Then Return ConvertToExcelReference(i.Range(rangeText))
+            If i.Name = worksheetName Then Return i.Range(rangeText)
         Next
         Return ExcelErrorNa
     End Function
 
     <ExcelFunction>
-    Public Function ReferencedVLookUp(keyword As String, Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "", Optional targetColumn As Integer = 1, Optional isApproximateMatching As Boolean = False) As ExcelVariant
+    Public Function ReferencedVLookUp(keyword As ExcelVariant, Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "", Optional targetColumn As Integer = 1, Optional isApproximateMatching As Boolean = False) As ExcelVariant
         Dim r = RelativeReferenceInternal(rangeText, path, worksheetName)
         If TypeOf r Is ClosedXML.Excel.IXLRange Then
             For Each i In CType(r, ClosedXML.Excel.IXLRange).FirstColumn.CellsUsed
                 Dim t = If(TypeOf i.Value Is Date And IsNumeric(keyword), Date.FromOADate(keyword), keyword)
-                If i.Value = t Then Return CType(r, ClosedXML.Excel.IXLRange).Cell(i.Address.RowNumber, targetColumn).Value
+                If i.Value.GetType = t.GetType AndAlso i.Value = t Then Return CType(r, ClosedXML.Excel.IXLRange).Cell(i.Address.RowNumber, targetColumn).CachedValue
             Next
         Else
-            Dim _range As Excel.Range = ConvertToRange(r)
-            Return Application.VLookup(keyword, _range, targetColumn, isApproximateMatching)
+            Return XlCall.Excel(XlCall.xlfVlookup, If(IsDate(keyword), CDate(keyword).ToOADate, keyword), r.Value, targetColumn, isApproximateMatching)
         End If
         Return ExcelErrorNull
     End Function
 
     <ExcelFunction>
-    Public Function ReferencedHLookUp(keyword As String, Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "", Optional targetRow As Integer = 1, Optional isApproximateMatching As Boolean = False) As ExcelVariant
+    Public Function ReferencedHLookUp(keyword As ExcelVariant, Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "", Optional targetRow As Integer = 1, Optional isApproximateMatching As Boolean = False) As ExcelVariant
         Dim r = RelativeReference(rangeText, path, worksheetName)
         If TypeOf r Is ClosedXML.Excel.IXLRange Then
             For Each i In CType(r, ClosedXML.Excel.IXLRange).FirstRow.CellsUsed
-                If i.Value = keyword Then Return CType(r, ClosedXML.Excel.IXLRange).Cell(targetRow, i.Address.ColumnNumber).Value
+                If i.Value = keyword Then Return CType(r, ClosedXML.Excel.IXLRange).Cell(targetRow, i.Address.ColumnNumber).CachedValue
             Next
         Else
-            Dim _range As Excel.Range = ConvertToRange(r)
-            Return Application.WorksheetFunction.HLookup(keyword, _range, targetRow, isApproximateMatching)
+            Return XlCall.Excel(XlCall.xlfHlookup, If(IsDate(keyword), CDate(keyword).ToOADate, keyword), r.Value, targetRow, isApproximateMatching)
         End If
         Return ExcelErrorNull
     End Function
