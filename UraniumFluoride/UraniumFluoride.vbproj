@@ -60,8 +60,8 @@
     <SignAssembly>false</SignAssembly>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="ClosedXML, Version=0.94.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\ClosedXML.0.94.0-rc1\lib\net40\ClosedXML.dll</HintPath>
+    <Reference Include="ClosedXML, Version=0.94.2.0, Culture=neutral, PublicKeyToken=fd1eb21b62ae805b, processorArchitecture=MSIL">
+      <HintPath>..\packages\ClosedXML.Signed.0.94.2\lib\net40\ClosedXML.dll</HintPath>
     </Reference>
     <Reference Include="DocumentFormat.OpenXml, Version=2.7.2.0, Culture=neutral, PublicKeyToken=8fb06cb64d019a17, processorArchitecture=MSIL">
       <HintPath>..\packages\DocumentFormat.OpenXml.2.7.2\lib\net40\DocumentFormat.OpenXml.dll</HintPath>
@@ -100,7 +100,7 @@
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Data" />
-    <Reference Include="System.Runtime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.ValueTuple, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.ValueTuple.4.5.0\lib\portable-net40+sl4+win8+wp8\System.ValueTuple.dll</HintPath>
     </Reference>
@@ -110,7 +110,6 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="System.Net.Http" />
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
@@ -190,6 +189,11 @@
     <Error Condition="!Exists('..\packages\ExcelDna.AddIn.0.35.4-beta4\build\ExcelDna.AddIn.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\ExcelDna.AddIn.0.35.4-beta4\build\ExcelDna.AddIn.targets'))" />
   </Target>
   <PropertyGroup>
-    <PostBuildEvent>copy $(TargetDir)UraniumFluoride-AddIn-x86-packed.xll C:\Users\Administrator\AppData\Roaming\Microsoft\AddIns</PostBuildEvent>
+    <PostBuildEvent>copy "$(TargetDir)UraniumFluoride-AddIn-x86-packed.xll" C:\Users\TrustedInstaller\Documents\Reports\datas
+del "C:\Users\TrustedInstaller\Documents\Reports\datas\SharedLinkage\UraniumFluoride-AddIn-x86-packed.xll"
+mklink /h "C:\Users\TrustedInstaller\Documents\Reports\datas\SharedLinkage\UraniumFluoride-AddIn-x86-packed.xll" "C:\Users\TrustedInstaller\Documents\Reports\datas\UraniumFluoride-AddIn-x86-packed.xll"
+copy "$(TargetDir)UraniumFluoride-AddIn-x64-packed.xll" C:\Users\TrustedInstaller\Documents\Reports\datas
+del "C:\Users\TrustedInstaller\Documents\Reports\datas\SharedLinkage\UraniumFluoride-AddIn-x64-packed.xll"
+mklink /h "C:\Users\TrustedInstaller\Documents\Reports\datas\SharedLinkage\UraniumFluoride-AddIn-x64-packed.xll" "C:\Users\TrustedInstaller\Documents\Reports\datas\UraniumFluoride-AddIn-x64-packed.xll"</PostBuildEvent>
   </PropertyGroup>
 </Project>

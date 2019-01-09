@@ -136,27 +136,93 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction(IsVolatile:=True)>
-    Public Function RandNoRepeat(bottom As Integer, top As Integer, Optional memorySet As Integer = 0, Optional memories As Integer = 30, Optional unrepeatPossibility As Integer = 0.99) As ExcelNumber
+    Public Function RandNoRepeat(bottom As Integer, top As Integer, Optional memorySet As Integer = 0, Optional memories As Integer = 30, Optional unrepeatPossibility As Integer = 0.99, Optional seed As ExcelNumber = "") As ExcelNumber
         Static memory As New ValueCircularListCollection(1024, 1024, Nothing)
         Dim x = memory
-        Static randomer As New Random(Now.Millisecond), randomer2 As New Random(Now.Millisecond And Now.Millisecond)
         If top - bottom < 2 Then Return bottom
         If memories < 2 Then memories = 2
         If memories > memory.ListCapacity Then memories = memory.ListCapacity
         If unrepeatPossibility > 1 Then unrepeatPossibility = 1
         If top - bottom < memories Then memories = top - bottom - 1
         If memorySet > memory.ListCapacity - 1 Or memorySet < 0 Then memorySet = 0
-
         Dim result As Integer
-        Dim f As Boolean = False
-        Do Until f
-            f = True
-            result = randomer.Next(bottom, top)
-            For i = -memories + 1 To 0
-                If memory(memorySet)(i) IsNot Nothing AndAlso memory(memorySet)(i) = result Then If randomer2.Next(0, 1000) / 1000 < unrepeatPossibility Then f = False
+
+        If IsNumeric(seed) Then
+            Dim randomer As New Random(CDec(seed).GetHashCode), randomer2 As New Random(Not CDec(seed).GetHashCode)
+
+            Dim memorySeeded(memories) As Integer
+            For i = 0 To memories
+                Dim f As Boolean = False
+                Do Until f
+                    f = True
+                    memorySeeded(i) = randomer.Next(bottom, top)
+                    For j = 0 To i - 1
+                        If memorySeeded(i) = result Then If randomer2.Next(0, 1000) / 1000 < unrepeatPossibility Then f = False
+                    Next
+                Loop
             Next
-        Loop
-        memory(memorySet).MoveNext(result)
+            result = memorySeeded.Last
+        Else
+            Static randomer As New Random(Now.Millisecond), randomer2 As New Random(Not Now.Millisecond)
+
+            Dim f As Boolean = False
+            Do Until f
+                f = True
+                result = randomer.Next(bottom, top)
+                For i = -memories + 1 To 0
+                    If memory(memorySet)(i) IsNot Nothing AndAlso memory(memorySet)(i) = result Then If randomer2.Next(0, 1000) / 1000 < unrepeatPossibility Then f = False
+                Next
+            Loop
+            memory(memorySet).MoveNext(result)
+        End If
+        Return result
+    End Function
+
+    <ExcelFunction(IsVolatile:=True)>
+    Public Function RandDiscreted(bottom As Integer, top As Integer, Optional memorySet As Integer = 0, Optional memories As Integer = 30, Optional unrepeatPossibility As Integer = 0.99, Optional seed As ExcelNumber = "") As ExcelNumber
+        Static memory As New ValueCircularListCollection(1024, 1024, Nothing)
+        Dim x = memory
+        If top - bottom < 2 Then Return bottom
+        If memories < 2 Then memories = 2
+        If memories > memory.ListCapacity Then memories = memory.ListCapacity
+        If unrepeatPossibility > 1 Then unrepeatPossibility = 1
+        If top - bottom < memories Then memories = top - bottom - 1
+        If memorySet > memory.ListCapacity - 1 Or memorySet < 0 Then memorySet = 0
+        Dim result As Integer
+        If IsNumeric(seed) Then
+            Dim randomer As New Random(CDec(seed).GetHashCode), randomer2 As New Random(Not CDec(seed).GetHashCode)
+
+            Dim memorySeeded(memories) As Integer
+            For i = 0 To memories
+                Dim f As Boolean = False
+                Do Until f
+                    f = True
+                    memorySeeded(i) = randomer.Next(bottom, top)
+                    For j = 0 To i - 1
+                        If randomer2.Next(0, 1000) / 1000 < unrepeatPossibility * (1 - Math.Abs(result - memorySeeded(i) / (top - bottom))) Then
+                            f = False
+                            Continue Do
+                        End If
+                    Next
+                Loop
+            Next
+            result = memorySeeded.Last
+        Else
+            Static randomer As New Random(Now.Millisecond), randomer2 As New Random(Now.Millisecond And Now.Millisecond)
+
+            Dim f As Boolean = False
+            Do Until f
+                f = True
+                result = randomer.Next(bottom, top)
+                For i = -memories + 1 To 0
+                    If memory(memorySet)(i) IsNot Nothing AndAlso randomer2.Next(0, 1000) / 1000 < unrepeatPossibility * (1 - Math.Abs(result - CDbl(memory(memorySet)(i)) / (top - bottom))) Then
+                        f = False
+                        Continue Do
+                    End If
+                Next
+            Loop
+            memory(memorySet).MoveNext(result)
+        End If
         Return result
     End Function
 
@@ -585,16 +651,15 @@ Public Module UtilityFunctions
             Return result2.ToString
         End If
     End Function
-    Dim log As New Text.StringBuilder
     <ExcelFunction(IsVolatile:=False, IsMacroType:=True)>
     Public Function CopyTextbox(<ExcelArgument(AllowReference:=True)> r As ExcelRange, textBoxName As String, Optional removeAllRecordedTextBoxes As Boolean = False, Optional left As Double = 0, Optional top As Double = 0, Optional width As Double = 0, Optional height As Double = 0) As ExcelVariant
         Static attachedObjects As New Dictionary(Of String, Shape)
-        Dim x = attachedObjects
         Dim _Range As Excel.Range = ConvertToRange(r)
         Dim ws As Worksheet = _Range.Worksheet
         Dim r1st As Excel.Range = _Range(1, 1)
-        If r1st.Address = "$BM$31" Then log.Append("executed;")
-        If Not CType(_Range.Worksheet.Parent, Workbook).FullName = Application.ActiveSheet.Parent.Fullname OrElse Not _Range.Worksheet.CodeName = Application.ActiveSheet.Codename Then If attachedObjects.ContainsKey(r1st.Address) Then Return 0 Else Return "HANGED"
+        If Not TryCast(_Range.Worksheet.Parent, Workbook)?.FullName = Application.ActiveSheet.Parent.Fullname OrElse Not _Range.Worksheet.CodeName = Application.ActiveSheet.Codename Then
+            If attachedObjects.ContainsKey(r1st.Address) Then Return 0 Else Return "HANGED"
+        End If
 
         If removeAllRecordedTextBoxes Then
             For o = 0 To attachedObjects.Count - 1
@@ -639,6 +704,7 @@ Public Module UtilityFunctions
         End Try
         Try
             nt = t.Duplicate
+            nt.Name = nName
         Catch ex As Exception
             Throw ex
         End Try
@@ -734,6 +800,21 @@ Public Module UtilityFunctions
     <ExcelFunction(IsMacroType:=True)>
     Public Function StringSplit(target As String, separator As String, index As Integer) As ExcelString
         If target.Split(separator).Count > index - 1 Then Return target.Split(separator)(index - 1) Else Return ExcelErrorNull
+    End Function
+
+    <ExcelFunction(IsMacroType:=True)>
+    Public Function GetHashCode(arg As ExcelVariant) As ExcelNumber
+        If TypeOf arg Is ExcelError Then
+            Return CType(arg, ExcelError).GetHashCode
+        ElseIf IsNumeric(arg) Then
+            Return CDec(arg).GetHashCode
+        ElseIf IsDate(arg) Then
+            Return CDate(arg).GetHashCode
+        ElseIf TypeOf arg Is ExcelEmpty Then
+            Return ExcelEmpty.Value.GetHashCode
+        Else
+            Return arg.ToString.GetHashCode
+        End If
     End Function
 
     'Questionable
