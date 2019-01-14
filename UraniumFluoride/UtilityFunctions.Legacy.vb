@@ -46,7 +46,33 @@ Partial Public Module UtilityFunctions
     End Function
     <ExcelFunction(IsMacroType:=True)>
     Public Function FILERELATIVEREFERENCE(workbookPath As String, Optional worksheetName As String = "", Optional rangeText As String = "A1") As ExcelRange
-        Return ConvertToExcelReference(RelativeReference(rangeText, workbookPath, worksheetName))
+        Dim wb As Workbook = Nothing
+        If workbookPath = "" Then
+            Try
+                wb = Application.ThisWorkbook
+            Catch ex As COMException
+                wb = Application.ActiveWorkbook
+            End Try
+        Else
+            If IO.File.Exists(workbookPath) Then
+                Dim wbc = From currentWb As Workbook In Application.Workbooks Where currentWb.Name = workbookPath.Split("\").Last Select currentWb
+                If wbc.Count > 0 Then
+                    wb = wbc.First
+                    If wb.FullName <> workbookPath Then Return ExcelErrorNa
+                Else
+                    wb = Application.Workbooks.Open(workbookPath)
+                    For Each i As Window In wb.Windows
+                        i.Visible = False
+                    Next
+                End If
+            Else Return ExcelErrorNa
+            End If
+        End If
+        If worksheetName = "" Then Return ConvertToExcelReference(wb.Worksheets(1).Range(rangeText))
+        For Each i As Worksheet In wb.Worksheets
+            If i.Name = worksheetName Then Return ConvertToExcelReference(i.Range(rangeText))
+        Next
+        Return ExcelErrorNa
     End Function
     <ExcelFunction>
     Public Function STRINGCOUNT(s As String, p As String) As Integer

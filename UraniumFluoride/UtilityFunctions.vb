@@ -521,6 +521,7 @@ Public Module UtilityFunctions
 
     <ExcelFunction>
     Public Function RegExMatchesCount(input As String, pattern As String, Optional startat As Integer = 0) As ExcelNumber
+
         Return New Text.RegularExpressions.Regex(pattern).Matches(input, startat).Count
     End Function
 
