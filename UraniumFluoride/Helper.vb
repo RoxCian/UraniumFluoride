@@ -1,5 +1,5 @@
 ﻿Namespace Helper
-
+#Disable Warning IDE0051
     Public Class ValueCircularListCollection
         Inherits CircularListCollection(Of Integer?)
 
@@ -217,7 +217,7 @@
     End Structure
 
     Public Class ClosedXMLWorkbookLibrary
-        Private Shared WorkbookCollection As New Dictionary(Of String, ClosedXML.Excel.XLWorkbook)
+        Private Shared ReadOnly WorkbookCollection As New Dictionary(Of String, ClosedXML.Excel.XLWorkbook)
         Public Shared Function Create(path As String, Optional isReadOnly As Boolean = True) As ClosedXML.Excel.XLWorkbook
             If Not FileIO.FileSystem.FileExists(path) Then Return Nothing
             If Not WorkbookCollection.ContainsKey(path) Then WorkbookCollection.Add(path, New ClosedXML.Excel.XLWorkbook(path, isReadOnly))

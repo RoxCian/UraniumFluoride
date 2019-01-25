@@ -6,7 +6,7 @@ Public Class AddIn
     Implements IExcelAddIn
 
     Public Sub AutoOpen() Implements IExcelAddIn.AutoOpen
-        ExcelIntegration.RegisterUnhandledExceptionHandler(Function(ex) "We're sorry, but here is an unhandled exception: " & ex.ToString)
+        ExcelIntegration.RegisterUnhandledExceptionHandler(Function(ex) "#EXCEPTION--We're sorry, but here is an unhandled exception: " & ex.ToString & "@ Uranium Fluoride")
         ExcelRegistration.GetExcelFunctions.ProcessParamsRegistrations.RegisterFunctions
 
     End Sub
