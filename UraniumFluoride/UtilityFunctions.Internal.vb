@@ -18,7 +18,7 @@ Partial Public Module UtilityFunctions
         If TypeOf ref Is ExcelReference Then Return Application.Range(GetExcelReferenceAddress_A1(ref).TopLeft, GetExcelReferenceAddress_A1(ref).BottomRight) Else If TypeOf ref Is Excel.Range Then Return ref Else Return Nothing
     End Function
     Public Function ConvertToExcelReference(r As ExcelRange) As ExcelReference
-        If TypeOf r Is Excel.Range Then Return New ExcelReference(r.Row - 1, r.Row - 1 + r.Rows.Count - 1, r.Column - 1, r.Column - 1 + r.Columns.Count - 1, CType(XlCall.Excel(XlCall.xlSheetId, "[" + r.Parent.Parent.Name + "]" + r.Worksheet.Name), ExcelReference).SheetId) Else If TypeOf r Is ExcelReference Then Return r Else Return New ExcelReference(0, 0)
+        If TypeOf r Is Excel.Range Then Return New ExcelReference(r.Row - 1, r.Row - 1 + r.Rows.Count - 1, r.Column - 1, r.Column - 1 + r.Columns.Count - 1, CType(XlCall.Excel(XlCall.xlSheetId, "[" + r.Parent.Parent.Name + "]" + r.Worksheet.Name), ExcelReference).SheetId) Else If TypeOf r Is ExcelReference Then Return r Else Return Nothing
     End Function
     Public Function GetExcelReferenceAddress_A1(ref As ExcelReference) As (TopLeft As String, BottomRight As String)
         Dim r As (TopLeft As String, BottomRight As String)
@@ -56,7 +56,7 @@ Partial Public Module UtilityFunctions
         result.Clear()
     End Function
 
-    Public Function RangeToArray(<ExcelArgument(AllowReference:=True)> r As ExcelRange) As ExcelVariant()
+    Public Function RangeToArray(r As ExcelRange) As ExcelVariant()
         Dim _Range As Excel.Range = TrimRange(r)
         Dim result(_Range.Count - 1) As ExcelVariant
 
@@ -69,7 +69,7 @@ Partial Public Module UtilityFunctions
         Next
         Return result
     End Function
-    Public Function RangeToMatrix(<ExcelArgument(AllowReference:=True)> r As ExcelRange) As ExcelVariant(,)
+    Public Function RangeToMatrix(r As ExcelRange) As ExcelVariant(,)
         Dim _Range As Excel.Range = TrimRange(r)
         Dim result(_Range.Rows.Count - 1, _Range.Columns.Count - 1) As ExcelVariant
         For i = 1 To _Range.Rows.Count
@@ -93,61 +93,65 @@ Partial Public Module UtilityFunctions
     Public Function Min(r As Excel.Range) As <MarshalAs(UnmanagedType.Currency)> Decimal
         Return Min(RangeToArray(r))
     End Function
-    Public Function Min(r As ExcelRange) As <MarshalAs(UnmanagedType.Currency)> Decimal
-        Return Min(RangeToArray(ConvertToRange(r)))
-    End Function
-    Public Function Min(ParamArray value()) As <MarshalAs(UnmanagedType.Currency)> Decimal
+    Public Function Min(Of T)(ParamArray value() As T) As <MarshalAs(UnmanagedType.Currency)> Decimal
         Dim result As Decimal = Decimal.MaxValue
         For Each i In value
-            If IsNumeric(i) AndAlso i < result Then result = i Else If IsDate(i) AndAlso CDate(i).ToOADate < result Then result = CDate(i).ToOADate
+            If IsNumeric(i) AndAlso CTypeDynamic(Of Decimal)(i) < result Then result = CTypeDynamic(Of Decimal)(i) Else If IsDate(i) AndAlso CTypeDynamic(Of Date)(i).ToOADate < result Then result = CTypeDynamic(Of Date)(i).ToOADate
         Next
         Return result
     End Function
-    Public Function Max(r As ExcelRange) As <MarshalAs(UnmanagedType.Currency)> Decimal
-        Return Max(RangeToArray(r))
+    Public Function Max(r As Excel.Range) As <MarshalAs(UnmanagedType.Currency)> Decimal
+        If IsArray(r) Then Return Max(r) Else Return Max(RangeToArray(r))
     End Function
-    Public Function Max(ParamArray value()) As <MarshalAs(UnmanagedType.Currency)> Decimal
+    Public Function Max(Of T)(ParamArray value() As T) As <MarshalAs(UnmanagedType.Currency)> Decimal
         Dim result As Decimal = Decimal.MinValue
         For Each i In value
-            If IsNumeric(i) AndAlso i > result Then result = CDec(i) Else If IsDate(i) AndAlso CDate(i).ToOADate > result Then result = CDate(i).ToOADate
+            If IsNumeric(i) AndAlso CTypeDynamic(Of Decimal)(i) > result Then result = CTypeDynamic(Of Decimal)(i) Else If IsDate(i) AndAlso CTypeDynamic(Of Date)(i).ToOADate > result Then result = CTypeDynamic(Of Date)(i).ToOADate
         Next
         Return result
     End Function
-    Public Function Med(r As ExcelRange) As <MarshalAs(UnmanagedType.Currency)> Decimal
-        Return Med(RangeToArray(r))
+    Public Function Med(r As Excel.Range) As <MarshalAs(UnmanagedType.Currency)> Decimal
+        If IsArray(r) Then Return Med(r) Else Return Med(RangeToArray(r))
     End Function
-    Public Function Med(ParamArray value()) As <MarshalAs(UnmanagedType.Currency)> Decimal
+    Public Function Med(Of T)(ParamArray value() As T) As <MarshalAs(UnmanagedType.Currency)> Decimal
         Dim result As Decimal
         Dim substraction As Decimal = Decimal.MaxValue
         Dim average As Decimal = UtilityFunctions.Average(value)
         For Each i In value
-            If IsNumeric(i) AndAlso Math.Abs(i - average) < substraction Then
-                result = CDec(i)
-                substraction = Math.Abs(i - average)
-            ElseIf IsDate(i) AndAlso Math.Abs(CDate(i).ToOADate - average) < result Then
-                result = CDate(i).ToOADate
-                substraction = Math.Abs(CDate(i).ToOADate - average)
+            If IsNumeric(i) AndAlso Math.Abs(CTypeDynamic(Of Decimal)(i) - average) < substraction Then
+                result = CTypeDynamic(Of Decimal)(i)
+                substraction = Math.Abs(CTypeDynamic(Of Decimal)(i) - average)
+            ElseIf IsDate(i) AndAlso Math.Abs(CTypeDynamic(Of Date)(i).ToOADate - average) < result Then
+                result = CTypeDynamic(Of Date)(i).ToOADate
+                substraction = Math.Abs(CTypeDynamic(Of Date)(i).ToOADate - average)
             End If
         Next
         Return result
     End Function
     Public Function Count(r As ExcelRange) As Integer
-        Return Count(RangeToArray(r))
+        If IsArray(r) Then Return Count(r) Else Return Count(RangeToArray(r))
     End Function
-    Public Function Count(ParamArray value()) As Integer
+    Public Function Count(Of T)(ParamArray value() As T) As Integer
         Dim result As Integer
         For Each i In value
             If Not IsBlank(i) And Not IsError(i) And (IsDate(i) Or IsNumeric(i)) Then result += 1
         Next
         Return result
     End Function
-    Public Function Sum(r As ExcelRange) As <MarshalAs(UnmanagedType.Currency)> Decimal
-        Return Sum(RangeToArray(r))
+    Public Function ParamArrayCount(ParamArray values()) As (RowsCount As Integer, ColumnsCount As Integer)()
+        Dim count(values.Count - 1) As (RowsCount As Integer, ColumnsCount As Integer)
+        For i = 0 To values.Count - 1
+            If IsArray(values(i)) Then count(i) = (CType(values(i), Array).GetLength(0), CType(values(i), Array).GetLength(1))
+        Next
+        Return count
     End Function
-    Public Function Sum(ParamArray value()) As <MarshalAs(UnmanagedType.Currency)> Decimal
+    Public Function Sum(r As ExcelRange) As <MarshalAs(UnmanagedType.Currency)> Decimal
+        If IsArray(r) Then Return Sum(r) Else Return Sum(RangeToArray(r))
+    End Function
+    Public Function Sum(Of T)(ParamArray value() As T) As <MarshalAs(UnmanagedType.Currency)> Decimal
         Dim result As Decimal
         For Each i In value
-            If IsNumeric(i) Then result += CDec(i) Else If IsDate(i) Then result += CDate(i).ToOADate
+            If IsNumeric(i) Then result += CTypeDynamic(Of Decimal)(i) Else If IsDate(i) Then result += CTypeDynamic(Of Date)(i).ToOADate
         Next
         Return result
     End Function

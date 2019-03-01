@@ -360,7 +360,7 @@ Public Module UtilityFunctions
         Dim minArray = TrimNumericArray(MatrixToArray(minValues))
         Dim maxArray = TrimNumericArray(MatrixToArray(maxValues))
         Dim stepArray = TrimNumericArray(MatrixToArray(stepValues))
-        Dim valuesCount As Integer = Min(minArray.Count, maxArray.Count, stepArray.Count)
+        Dim valuesCount As Integer = Min({minArray.Count, maxArray.Count, stepArray.Count})
         If variantIndexToReturn > valuesCount Then Return ExcelErrorNa
         Dim fittedValues(valuesCount - 1) As ExcelNumber
         For i = 0 To valuesCount - 1
@@ -694,7 +694,7 @@ Public Module UtilityFunctions
         Dim nt As Excel.Shape
         Dim textBoxScale As Double = 1
         Try
-            If Not (t.Width <= r1st.MergeArea.Width And t.Height <= r1st.MergeArea.Height) Then textBoxScale = Min(r1st.MergeArea.Width / t.Width, r1st.MergeArea.Height / t.Height)
+            If Not (t.Width <= r1st.MergeArea.Width And t.Height <= r1st.MergeArea.Height) Then textBoxScale = Min({r1st.MergeArea.Width / t.Width, r1st.MergeArea.Height / t.Height})
         Catch ex As AccessViolationException
             textBoxScale = 1
         End Try
@@ -818,7 +818,93 @@ Public Module UtilityFunctions
         End If
     End Function
 
-    'Questionable
+    <ExcelFunction>
+    Public Function UsedRange(<ExcelArgument(AllowReference:=True)> r As ExcelVariant) As ExcelRange
+        Return ConvertToExcelReference(ConvertToRange(r).Parent.UsedRange)
+    End Function
+
+    <ExcelFunction>
+    Public Function ArrayedAnd(ParamArray values As ExcelVariant()) As ExcelVariant
+        Dim result(,) As ExcelVariant
+        Dim count = ParamArrayCount(values)
+
+        ReDim result(Max(count.Select(Function(x) x.RowsCount).ToArray) - 1, Max(count.Select(Function(x) x.ColumnsCount).ToArray) - 1)
+        For i = 0 To result.GetLength(0) - 1
+            For j = 0 To result.GetLength(1) - 1
+                Dim resultElement As Boolean = True
+                For Each k In values
+                    If IsArray(k) AndAlso (i < k.GetLength(0) And j < k.GetLength(1)) Then resultElement = resultElement And k(i, j) Else resultElement = resultElement And k
+                    If Not resultElement Then Exit For
+                Next
+                result(i, j) = resultElement
+            Next
+        Next
+        Return result
+    End Function
+
+    <ExcelFunction>
+    Public Function ArrayedOr(ParamArray values As ExcelVariant()) As ExcelVariant
+        Dim result(,) As ExcelVariant
+        Dim count = ParamArrayCount(values)
+
+        ReDim result(Max(count.Select(Function(x) x.RowsCount).ToArray) - 1, Max(count.Select(Function(x) x.ColumnsCount).ToArray) - 1)
+        For i = 0 To result.GetLength(0) - 1
+            For j = 0 To result.GetLength(1) - 1
+                Dim resultElement As Boolean = False
+                For Each k In values
+                    If IsArray(k) AndAlso (i < k.GetLength(0) And j < k.GetLength(1)) Then resultElement = resultElement Or k(i, j) Else resultElement = resultElement Or k
+                    If resultElement Then Exit For
+                Next
+                result(i, j) = resultElement
+            Next
+        Next
+        Return result
+    End Function
+
+    <ExcelFunction>
+    Public Function ArrayedXor(ParamArray values As ExcelVariant()) As ExcelVariant
+        Dim result(,) As ExcelVariant
+        Dim count = ParamArrayCount(values)
+
+        ReDim result(Max(count.Select(Function(x) x.RowsCount).ToArray) - 1, Max(count.Select(Function(x) x.ColumnsCount).ToArray) - 1)
+        For i = 0 To result.GetLength(0) - 1
+            For j = 0 To result.GetLength(1) - 1
+                Dim resultElement As Boolean = values.First
+                For k = 1 To values.Count - 1
+                    If IsArray(values(k)) AndAlso (i < values(k).GetLength(0) And j < values(k).GetLength(1)) Then resultElement = resultElement Xor values(k)(i, j) Else resultElement = resultElement Xor values(k)
+                Next
+                result(i, j) = resultElement
+            Next
+        Next
+        Return result
+    End Function
+
+    <ExcelFunction>
+    Public Function ArrayedIf(expression As ExcelVariant(,), expressionIfTrue As ExcelVariant(,), expressionIfFalse As ExcelVariant(,)) As ExcelVariant
+        Dim result(Max({expression.GetLength(0), expressionIfTrue.GetLength(0), expressionIfFalse.GetLength(0)}) - 1, Max({expression.GetLength(1), expressionIfTrue.GetLength(1), expressionIfFalse.GetLength(1)}) - 1) As ExcelVariant
+        For i = 0 To result.GetLength(0) - 1
+            For j = 0 To result.GetLength(1) - 1
+                result(i, j) = If(If(expression.GetLength(0) > i + 1 And expression.GetLength(1) > j + 1, expression(i + 1, j + 1), ""),
+                                  If(expressionIfTrue.GetLength(0) > i + 1 And expressionIfTrue.GetLength(1) > j + 1, expressionIfTrue(i + 1, j + 1), ""),
+                                  If(expressionIfFalse.GetLength(0) > i + 1 And expressionIfFalse.GetLength(1) > j + 1, expressionIfFalse(i + 1, j + 1), "")
+                                 )
+            Next
+        Next
+        Return result
+    End Function
+
+    <ExcelFunction>
+    Public Function ArrayedChoose(expressionConditions As ExcelVariant(,), expressionOptions As ExcelVariant(,)) As ExcelVariant
+        Dim result As New List(Of ExcelVariant)
+        For i = 0 To Min({expressionConditions.GetLength(0) - 1, expressionOptions.GetLength(0) - 1})
+            For j = 0 To Min({expressionConditions.GetLength(1) - 1, expressionOptions.GetLength(1) - 1})
+                If expressionConditions(i, j) Then result.Add(expressionOptions(i, j))
+            Next
+        Next
+        Return result.ToArray
+    End Function
+
+    ''Questionable
     '<ExcelFunction>
     'Public Function FormulaRegister(formulaName As String, formula As String) As ExcelVariant
     '    Static FormulaDictionary As New Dictionary(Of String, String)
@@ -829,7 +915,7 @@ Public Module UtilityFunctions
     '    If Not FormulaDictionary.ContainsKey(formulaName) Then FormulaDictionary.Add(formulaName, formula) Else If FormulaDictionary(formulaName) <> formula Then FormulaDictionary(formulaName) = formula Else Return -1
     '    Return 0
     'End Function
-    '
+
     '<ExcelFunction(Description:="Call a formula registered.", IsVolatile:=True, IsMacroType:=False)>
     'Public Function FormulaCall(formulaName As String, ParamArray macros As String()) As ExcelVariant
     '    Dim d As Dictionary(Of String, String)
