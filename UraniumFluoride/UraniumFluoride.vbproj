@@ -189,11 +189,11 @@
     <Error Condition="!Exists('..\packages\ExcelDna.AddIn.0.35.4-beta4\build\ExcelDna.AddIn.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\ExcelDna.AddIn.0.35.4-beta4\build\ExcelDna.AddIn.targets'))" />
   </Target>
   <PropertyGroup>
-    <PostBuildEvent>copy "$(TargetDir)UraniumFluoride-AddIn-x86-packed.xll" C:\Users\TrustedInstaller\Documents\Reports\datas
-del "C:\Users\TrustedInstaller\Documents\Reports\datas\SharedLinkage\UraniumFluoride-AddIn-x86-packed.xll"
-mklink /h "C:\Users\TrustedInstaller\Documents\Reports\datas\SharedLinkage\UraniumFluoride-AddIn-x86-packed.xll" "C:\Users\TrustedInstaller\Documents\Reports\datas\UraniumFluoride-AddIn-x86-packed.xll"
+    <PostBuildEvent>del C:\Users\TrustedInstaller\Documents\Reports\datas\UraniumFluoride-AddIn-x86-packed.xll
+del C:\Users\TrustedInstaller\Documents\Reports\datas\UraniumFluoride-AddIn-x64-packed.xll
+copy "$(TargetDir)UraniumFluoride-AddIn-x86-packed.xll" C:\Users\TrustedInstaller\Documents\Reports\datas
 copy "$(TargetDir)UraniumFluoride-AddIn-x64-packed.xll" C:\Users\TrustedInstaller\Documents\Reports\datas
-del "C:\Users\TrustedInstaller\Documents\Reports\datas\SharedLinkage\UraniumFluoride-AddIn-x64-packed.xll"
-mklink /h "C:\Users\TrustedInstaller\Documents\Reports\datas\SharedLinkage\UraniumFluoride-AddIn-x64-packed.xll" "C:\Users\TrustedInstaller\Documents\Reports\datas\UraniumFluoride-AddIn-x64-packed.xll"</PostBuildEvent>
+icacls "C:\Users\TrustedInstaller\Documents\Reports\datas\UraniumFluoride-AddIn-x86-packed.xll" /grant:r Everyone:RX
+icacls "C:\Users\TrustedInstaller\Documents\Reports\datas\UraniumFluoride-AddIn-x64-packed.xll" /grant:r Everyone:RX</PostBuildEvent>
   </PropertyGroup>
 </Project>

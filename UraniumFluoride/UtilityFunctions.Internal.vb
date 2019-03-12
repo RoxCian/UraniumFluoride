@@ -15,7 +15,15 @@ Partial Public Module UtilityFunctions
 
 #Region "Range converting functions"
     Public Function ConvertToRange(ref As ExcelRange) As Excel.Range
-        If TypeOf ref Is ExcelReference Then Return Application.Range(GetExcelReferenceAddress_A1(ref).TopLeft, GetExcelReferenceAddress_A1(ref).BottomRight) Else If TypeOf ref Is Excel.Range Then Return ref Else Return Nothing
+        If TypeOf ref Is ExcelReference Then
+            Dim refSheetFullName As String = XlCall.Excel(XlCall.xlSheetNm, ref)
+            Dim refWorkbookName As String = Text.RegularExpressions.Regex.Match(refSheetFullName, "(?<=\[).*(?=\])").Value
+            Dim refSheetName As String = Text.RegularExpressions.Regex.Match(refSheetFullName, "(?<=\[.*\]).*").Value
+            Dim refAddress = GetExcelReferenceAddress_A1(ref)
+            Return Application.Workbooks(refWorkbookName).Worksheets(refSheetName).Range(refAddress.TopLeft, refAddress.BottomRight)
+        Else
+            If TypeOf ref Is Excel.Range Then Return ref Else Return Nothing
+        End If
     End Function
     Public Function ConvertToExcelReference(r As ExcelRange) As ExcelReference
         If TypeOf r Is Excel.Range Then Return New ExcelReference(r.Row - 1, r.Row - 1 + r.Rows.Count - 1, r.Column - 1, r.Column - 1 + r.Columns.Count - 1, CType(XlCall.Excel(XlCall.xlSheetId, "[" + r.Parent.Parent.Name + "]" + r.Worksheet.Name), ExcelReference).SheetId) Else If TypeOf r Is ExcelReference Then Return r Else Return Nothing
@@ -128,8 +136,8 @@ Partial Public Module UtilityFunctions
         Next
         Return result
     End Function
-    Public Function Count(r As ExcelRange) As Integer
-        If IsArray(r) Then Return Count(r) Else Return Count(RangeToArray(r))
+    Public Function Count(r As Excel.Range) As Integer
+        Return Count(RangeToArray(r))
     End Function
     Public Function Count(Of T)(ParamArray value() As T) As Integer
         Dim result As Integer
