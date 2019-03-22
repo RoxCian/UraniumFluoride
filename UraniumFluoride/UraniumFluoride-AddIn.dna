@@ -11,6 +11,7 @@
   <Reference Path="FastMember.Signed.dll" Pack="true" />
   <Reference Path="ExcelMemberFormat.dll" Pack="true" />
   <Reference Path="FastMember.Signed.dll" Pack="true" />
+  <Reference Path="System.Numerics.Vectors.dll" Pack="true" />
   <!--
        The RuntimeVersion attribute above allows two settings:
        * RuntimeVersion="v4.0" - for .NET 4 and 4.5

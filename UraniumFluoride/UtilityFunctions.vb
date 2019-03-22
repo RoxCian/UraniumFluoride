@@ -66,6 +66,7 @@ Public Module UtilityFunctions
                 value(i) = ExcelEmpty.Value
                 Dim ave2 As Decimal = Average(value)
                 If ave2 = 0 Then Return 0
+                If Count(value) <= 3 Then Return ave2
                 For j = 0 To value.Count - 1
                     If TypeOf value(j) IsNot ExcelEmpty AndAlso Math.Abs(value(j) - ave) / ave >= ratio Then Return ExcelErrorValue
                 Next
@@ -436,6 +437,7 @@ Public Module UtilityFunctions
 
     <ExcelFunction>
     Public Function RegExFind(text As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelNumber
+        If Not IsNumeric(index) Or index < 1 Then index = 1
         Dim e As New Text.RegularExpressions.Regex(pattern, If(isCaseIgnore, System.Text.RegularExpressions.RegexOptions.IgnoreCase, System.Text.RegularExpressions.RegexOptions.None))
         Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(text)
         If m.Count <= index - 1 Then Return -1 Else Return m(index - 1).Index + 1
@@ -443,7 +445,7 @@ Public Module UtilityFunctions
 
     <ExcelFunction>
     Public Function RegExMatch(text As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelString
-        If index < 1 Then Return ExcelErrorNull
+        If Not IsNumeric(index) Or index < 1 Then index = 1
         Dim e As New Text.RegularExpressions.Regex(pattern, If(isCaseIgnore, System.Text.RegularExpressions.RegexOptions.IgnoreCase, System.Text.RegularExpressions.RegexOptions.None))
         Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(text)
         If m.Count <= index - 1 Then Return ExcelErrorNull Else Return m(index - 1).Value
@@ -471,18 +473,32 @@ Public Module UtilityFunctions
             End Try
         Else
             If IO.File.Exists(path) Then
-                Dim wbc = From currentWb As Workbook In Application.Workbooks Where currentWb.Name = path.Split("\").Last Select currentWb
-                If wbc.Count > 0 Then
-                    wb = wbc.First
-                    If wb.FullName <> path Then Return ExcelErrorNa
-                Else
-                    Dim closedWb = Helper.ClosedXMLWorkbookLibrary.Create(path)
-                    If worksheetName = "" Then Return closedWb.Worksheets(0).Range(rangeText)
-                    For Each i In closedWb.Worksheets
-                        If i.Name = worksheetName Then Return i.Range(rangeText)
-                    Next
-                End If
-            Else Return ExcelErrorNa
+                Try
+                    Dim wbc = From currentWb As Workbook In Application.Workbooks Where currentWb.Name = path.Split("\").Last Select currentWb
+                    If wbc.Count > 0 Then
+                        wb = wbc.First
+                        If wb.FullName <> path Then Return ExcelErrorNa
+                    Else
+                        Dim closedWb = Helper.ClosedXMLWorkbookLibrary.Create(path)
+                        If worksheetName = "" Then Return closedWb.Worksheets(0).Range(rangeText)
+                        For Each i In closedWb.Worksheets
+                            If i.Name = worksheetName Then Return i.Range(rangeText)
+                        Next
+                    End If
+                Catch
+                    Dim tempFolder As String = Environment.GetEnvironmentVariable("TEMP")
+                    Dim tempPath As String = tempFolder & "\" & New IO.FileInfo(path).Name
+                    Try
+                        FileIO.FileSystem.CopyFile(path, tempPath, True)
+                    Catch
+                    End Try
+                    Dim closedWb = Helper.ClosedXMLWorkbookLibrary.Create(tempPath, path)
+                        If worksheetName = "" Then Return closedWb.Worksheets(0).Range(rangeText)
+                        For Each i In closedWb.Worksheets
+                            If i.Name = worksheetName Then Return i.Range(rangeText)
+                        Next
+                    End Try
+                    Else Return ExcelErrorNa
             End If
         End If
         If worksheetName = "" Then Return wb.Worksheets(1).Range(rangeText)
@@ -521,7 +537,7 @@ Public Module UtilityFunctions
 
     <ExcelFunction>
     Public Function RegExMatchesCount(input As String, pattern As String, Optional startat As Integer = 0) As ExcelNumber
-
+        If Not IsNumeric(startat) Or startat < 1 Then startat = 1
         Return New Text.RegularExpressions.Regex(pattern).Matches(input, startat).Count
     End Function
 
@@ -902,6 +918,55 @@ Public Module UtilityFunctions
             Next
         Next
         Return result.ToArray
+    End Function
+
+    <ExcelFunction>
+    Public Function CCRSplineAnalyze(xValues As ExcelNumber(,), yValues As ExcelNumber(,), command As ExcelString, ParamArray parameters As ExcelNumber()) As ExcelNumber
+        Static memory As New CircularList(Of CatmullRomSpline)(256)
+        Static [step] = 0.01
+        Dim pl As New List(Of Numerics.Vector2)
+        Dim cSpline As CatmullRomSpline
+        Dim mf As Boolean = False
+        For i = 0 To Min(xValues.GetLength(0), yValues.GetLength(0)) - 1
+            For j = 0 To Min(xValues.GetLength(1), yValues.GetLength(1)) - 1
+                If (IsNumeric(xValues(i, j)) Or IsDate(xValues(i, j))) And (IsNumeric(yValues(i, j)) Or IsDate(yValues(i, j))) Then _
+                    pl.Add(New Numerics.Vector2(If(IsDate(xValues(i, j)), CDate(xValues(i, j)).ToOADate, xValues(i, j)), If(IsDate(yValues(i, j)), CDate(yValues(i, j)).ToOADate, yValues(i, j))))
+            Next
+        Next
+        Dim cIndex As Integer
+        For cIndex = -memory.Count + 1 To 0
+            If memory(cIndex).P.Count = pl.Count Then
+                Dim j As Integer = 0
+                Do
+                    If memory(cIndex).P(0) <> pl(0) Then Continue For
+                    j += 1
+                Loop Until j > memory(cIndex).P.Count - 1
+                mf = True
+                Exit For
+            End If
+        Next
+        If Not mf Then
+            cSpline = New CatmullRomSpline(pl.ToArray)
+            memory.MoveNext(cSpline)
+        Else
+            cSpline = memory(cIndex)
+        End If
+        Select Case command
+            Case "GetX"
+                Return cSpline.GetX(parameters(0), [step])
+            Case "GetY"
+                Return cSpline.GetY(parameters(0), [step])
+            Case "GetYMax"
+                Return cSpline.GetYMaxPlot([step]).Y
+            Case "GetXInYMax"
+                Return cSpline.GetYMaxPlot([step]).X
+            Case "GetXMax"
+                Return cSpline.GetXMaxPlot([step]).X
+            Case "GetYInXMax"
+                Return cSpline.GetXMaxPlot([step]).Y
+            Case Else
+                Return ExcelErrorValue
+        End Select
     End Function
 
     ''Questionable

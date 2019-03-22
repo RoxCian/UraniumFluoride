@@ -218,11 +218,165 @@
 
     Public Class ClosedXMLWorkbookLibrary
         Private Shared ReadOnly WorkbookCollection As New Dictionary(Of String, ClosedXML.Excel.XLWorkbook)
-        Public Shared Function Create(path As String, Optional isReadOnly As Boolean = True) As ClosedXML.Excel.XLWorkbook
+        Public Shared Function Create(path As String, Optional [alias] As String = "", Optional isReadOnly As Boolean = True) As ClosedXML.Excel.XLWorkbook
+            If [alias] = "" Then [alias] = path
             If Not FileIO.FileSystem.FileExists(path) Then Return Nothing
-            If Not WorkbookCollection.ContainsKey(path) Then WorkbookCollection.Add(path, New ClosedXML.Excel.XLWorkbook(path, isReadOnly))
-            Return WorkbookCollection(path)
+            If Not WorkbookCollection.ContainsKey([alias]) Then WorkbookCollection.Add([alias], New ClosedXML.Excel.XLWorkbook(path, isReadOnly))
+            Return WorkbookCollection([alias])
         End Function
         Private Sub New() : End Sub
     End Class
+
+    Public Class CatmullRomSpline
+        Public Const CentripetalAlpha As Single = 0.5
+        Public Const UniformAlpha As Single = 0
+        Public Const ChordalAlpha As Single = 1
+        Public ReadOnly Property P As Numerics.Vector2()
+        Public Property Alpha As Single
+        Public ReadOnly Property T(index As Integer) As Single
+            Get
+                Static ResultDictionary As New Dictionary(Of Single, Single())
+                If ResultDictionary.ContainsKey(Alpha) Then
+                    Return ResultDictionary(Alpha)(index)
+                Else
+                    Dim tvalue(P.Count - 1) As Single
+                    tvalue(0) = 0
+                    For i = 1 To P.Count - 1
+                        tvalue(i) = GetTParameter(tvalue(i - 1), P(i - 1), P(i), Alpha)
+                    Next
+                    ResultDictionary.Add(Alpha, tvalue)
+                    Return tvalue(index)
+                End If
+            End Get
+        End Property
+        Public ReadOnly Property A(index As Integer, tValue As Single) As Numerics.Vector2
+            Get
+                Dim t0 = T(index - 1)
+                Dim t1 = T(index)
+                Dim p0 = P(index - 1)
+                Dim p1 = P(index)
+                Return (t1 - tValue) / (t1 - t0) * p0 + (tValue - t0) / (t1 - t0) * p1
+            End Get
+        End Property
+        Private Function GetAFunc(index As Integer) As Func(Of Single, Numerics.Vector2)
+            Return Function(tValue As Single)
+                       Dim t0 = T(index - 1)
+                       Dim t1 = T(index)
+                       Dim p0 = P(index - 1)
+                       Dim p1 = P(index)
+                       Return (t1 - tValue) / (t1 - t0) * p0 + (tValue - t0) / (t1 - t0) * p1
+                   End Function
+        End Function
+        Public ReadOnly Property B(index As Integer, tValue As Single) As Numerics.Vector2
+            Get
+                Dim t0 = T(index - 1)
+                Dim t2 = T(index + 1)
+                Dim a1 = A(index, tValue)
+                Dim a2 = A(index + 1, tValue)
+                Return (t2 - tValue) / (t2 - t0) * a1 + (tValue - t0) / (t2 - t0) * a2
+            End Get
+        End Property
+        Private Function GetBFunc(index As Integer) As Func(Of Single, Numerics.Vector2)
+            Return Function(tValue As Single)
+                       Dim t0 = T(index - 1)
+                       Dim t2 = T(index + 1)
+                       Dim a1 = A(index, tValue)
+                       Dim a2 = A(index + 1, tValue)
+                       Return (t2 - tValue) / (t2 - t0) * a1 + (tValue - t0) / (t2 - t0) * a2
+                   End Function
+        End Function
+        Public ReadOnly Property C(index As Integer, tValue As Single) As Numerics.Vector2
+            Get
+                Dim t1 = T(index)
+                Dim t2 = T(index + 1)
+                Dim b1 = B(index, tValue)
+                Dim b2 = B(index + 1, tValue)
+                Return (t2 - tValue) / (t2 - t1) * b1 + (tValue - t1) / (t2 - t1) * b2
+            End Get
+        End Property
+        Private Function GetCFunc(index As Integer) As Func(Of Single, Numerics.Vector2)
+            Return Function(tValue As Single)
+                       Dim t1 = T(index)
+                       Dim t2 = T(index + 1)
+                       Dim b1 = B(index, tValue)
+                       Dim b2 = B(index + 1, tValue)
+                       Return (t2 - tValue) / (t2 - t1) * b1 + (tValue - t1) / (t2 - t1) * b2
+                   End Function
+        End Function
+
+        Public Function GetPlot(tValue As Single) As Numerics.Vector2
+            If tValue >= T(0) And tValue < T(1) Then Return B(1, tValue)
+            For i = 1 To P.Count - 3
+                If T(i) <= tValue And T(i + 1) > tValue Then Return C(i, tValue)
+            Next
+            If tValue >= T(P.Count - 2) And tValue <= T(P.Count - 1) Then Return B(P.Count - 2, tValue)
+            Return New Numerics.Vector2(Single.MinValue)
+        End Function
+        Public Function GetAllPlots([step] As Single) As Numerics.Vector2()
+            Dim result As New List(Of Numerics.Vector2)
+            For tvalue = T(0) To T(P.Count - 1) Step [step]
+                result.Add(GetPlot(tvalue))
+            Next
+            Return result.ToArray
+        End Function
+        Public Function GetYMaxPlot([step] As Single) As Numerics.Vector2
+            Static allPlotsDictionary As New Dictionary(Of (Alpha As Single, [Step] As Single), Numerics.Vector2())
+            Dim plots As Numerics.Vector2()
+            If allPlotsDictionary.ContainsKey((Me.Alpha, [step])) Then plots = allPlotsDictionary((Me.Alpha, [step])) Else plots = GetAllPlots([step]).ToArray
+            Dim pYMax As New Numerics.Vector2(Single.MinValue)
+            For Each i In plots
+                If i.Y > pYMax.Y Then pYMax = i
+            Next
+            Return pYMax
+        End Function
+        Public Function GetXMaxPlot([step] As Single) As Numerics.Vector2
+            Static allPlotsDictionary As New Dictionary(Of (Alpha As Single, [Step] As Single), Numerics.Vector2())
+            Dim plots As Numerics.Vector2()
+            If allPlotsDictionary.ContainsKey((Me.Alpha, [step])) Then plots = allPlotsDictionary((Me.Alpha, [step])) Else plots = GetAllPlots([step]).ToArray
+            Dim pXMax As New Numerics.Vector2(Single.MinValue)
+            For Each i In plots
+                If i.X > pXMax.X Then pXMax = i
+            Next
+            Return pXMax
+        End Function
+        Public Function GetX(y As Single, [step] As Single) As Double
+            Static allPlotsDictionary As New Dictionary(Of (Alpha As Single, [Step] As Single), Numerics.Vector2())
+            Dim plots As Numerics.Vector2()
+            If allPlotsDictionary.ContainsKey((Me.Alpha, [step])) Then plots = allPlotsDictionary((Me.Alpha, [step])) Else plots = GetAllPlots([step]).ToArray
+            For i = 0 To plots.Count - 2
+                Dim y0 = plots(i).Y
+                Dim y1 = plots(i + 1).Y
+                Dim x0 = plots(i).X
+                Dim x1 = plots(i + 1).X
+                If y >= y0 And y <= y1 Then Return (x0 - x1) / (y0 - y1) * y + (y0 * x1 - y1 * x0) / (y0 - y1)
+            Next
+            Return Single.MinValue
+        End Function
+        Public Function GetY(x As Single, [step] As Single) As Double
+            Static allPlotsDictionary As New Dictionary(Of (Alpha As Single, [Step] As Single), Numerics.Vector2())
+            Dim plots As Numerics.Vector2()
+            If allPlotsDictionary.ContainsKey((Me.Alpha, [step])) Then plots = allPlotsDictionary((Me.Alpha, [step])) Else plots = GetAllPlots([step]).ToArray
+            For i = 0 To plots.Count - 2
+                Dim y0 = plots(i).Y
+                Dim y1 = plots(i + 1).Y
+                Dim x0 = plots(i).X
+                Dim x1 = plots(i + 1).X
+                If x >= x0 And x <= x1 Then Return (y0 - y1) / (x0 - x1) * x + (y1 * x0 - y0 * x1) / (x0 - x1)
+            Next
+            Return Single.MinValue
+        End Function
+        Public Sub New(plots As (X As Single, Y As Single)(), Optional alpha As Single = CentripetalAlpha)
+            Me.P = (From _p In plots Select New Numerics.Vector2(_p.X, _p.Y)).ToArray
+            Me.Alpha = alpha
+        End Sub
+        Public Sub New(plots As Numerics.Vector2(), Optional alpha As Single = CentripetalAlpha)
+            Me.P = plots
+            Me.Alpha = alpha
+        End Sub
+
+        Public Shared Function GetTParameter(tl As Single, pl As Numerics.Vector2, pr As Numerics.Vector2, alpha As Single) As Single
+            Return ((pr.X - pl.X) ^ 2 + (pr.Y + pl.Y) ^ 2) ^ (alpha / 2) + tl
+        End Function
+    End Class
+
 End Namespace
