@@ -72,7 +72,7 @@ Partial Public Module UtilityFunctions
         For i = 1 To _Range.Rows.Count
             For j = 1 To _Range.Columns.Count
                 result(p) = _Range(i, j).Value
-                p = p + 1
+                p += 1
             Next
         Next
         Return result
@@ -202,29 +202,6 @@ Partial Public Module UtilityFunctions
         If TypeOf value Is Range Then Return Application.WorksheetFunction.IsError(value)
         If TypeOf value Is ExcelDna.Integration.ExcelError Then Return True
         Return False
-    End Function
-    Private Function GetShape(shapeName As String, Optional worksheetName As String = "") As Shape
-        Dim ws As Worksheet = Nothing
-        If worksheetName = "" Then
-            Application.ThisWorkbook.Activate()
-            ws = Application.ActiveSheet
-        Else
-            Dim a As Worksheet
-            For Each a In Application.ThisWorkbook.Worksheets
-                If a.Name = worksheetName Then ws = a
-            Next
-        End If
-        If ws Is Nothing Then Return Nothing
-        Dim s As Excel.Shape = Nothing
-        Dim f As Boolean
-        f = False
-        For Each s In ws.Shapes
-            If s.Name = shapeName Then
-                f = True
-                Exit For
-            End If
-        Next
-        If f Then Return s Else Return Nothing
     End Function
 #End Region
 

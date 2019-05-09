@@ -339,7 +339,7 @@
             Next
             Return pXMax
         End Function
-        Public Function GetX(y As Single, [step] As Single) As Double
+        Public Function GetXValue(y As Single, [step] As Single) As Double
             Static allPlotsDictionary As New Dictionary(Of (Alpha As Single, [Step] As Single), Numerics.Vector2())
             Dim plots As Numerics.Vector2()
             If allPlotsDictionary.ContainsKey((Me.Alpha, [step])) Then plots = allPlotsDictionary((Me.Alpha, [step])) Else plots = GetAllPlots([step]).ToArray
@@ -352,7 +352,7 @@
             Next
             Return Single.MinValue
         End Function
-        Public Function GetY(x As Single, [step] As Single) As Double
+        Public Function GetYValue(x As Single, [step] As Single) As Double
             Static allPlotsDictionary As New Dictionary(Of (Alpha As Single, [Step] As Single), Numerics.Vector2())
             Dim plots As Numerics.Vector2()
             If allPlotsDictionary.ContainsKey((Me.Alpha, [step])) Then plots = allPlotsDictionary((Me.Alpha, [step])) Else plots = GetAllPlots([step]).ToArray
@@ -376,6 +376,43 @@
 
         Public Shared Function GetTParameter(tl As Single, pl As Numerics.Vector2, pr As Numerics.Vector2, alpha As Single) As Single
             Return ((pr.X - pl.X) ^ 2 + (pr.Y + pl.Y) ^ 2) ^ (alpha / 2) + tl
+        End Function
+    End Class
+
+    Public Class Interval
+        Private Shared ReadOnly OperatorCodeCollection As New Dictionary(Of String, (InitializingParameterCount As Integer, IntervalToString As Func(Of String(), String), IsInInterval As Func(Of String(), Double, Boolean))) From {
+            {"gt", (1, Function(p As String()) "＞" & p(0), Function(p As String(), d As Double) d > p(0))},
+            {"lt", (1, Function(p As String()) "＜" & p(0), Function(p As String(), d As Double) d < p(0))},
+            {"ge", (1, Function(p As String()) "≥" & p(0), Function(p As String(), d As Double) d >= p(0))},
+            {"le", (1, Function(p As String()) "≤" & p(0), Function(p As String(), d As Double) d <= p(0))},
+            {"in", (2, Function(p As String()) p(0) & "～" & p(1), Function(p As String(), d As Double) d >= p(0) And d <= p(1))},
+            {"eq", (2, Function(p As String()) p(0), Function(p As String(), d As Double) d = p(0))},
+            {"lc", (2, Function(p As String()) "[" & p(0) & ", +∞)", Function(p As String(), d As Double) d >= p(0))},
+            {"lo", (2, Function(p As String()) "(" & p(0) & ", +∞)", Function(p As String(), d As Double) d > p(0))},
+            {"rc", (2, Function(p As String()) "(-∞, " & p(0) & "]", Function(p As String(), d As Double) d <= p(0))},
+            {"ro", (2, Function(p As String()) "(-∞, " & p(0) & ")", Function(p As String(), d As Double) d < p(0))},
+            {"lcro", (2, Function(p As String()) "[" & p(0) & ", " & p(1) & ")", Function(p As String(), d As Double) d >= p(0) And d < p(1))},
+            {"lorc", (2, Function(p As String()) "(" & p(0) & ", " & p(1) & "]", Function(p As String(), d As Double) d > p(0) And d <= p(1))},
+            {"lcrc", (2, Function(p As String()) "[" & p(0) & ", " & p(1) & "]", Function(p As String(), d As Double) d >= p(0) And d <= p(1))},
+            {"loro", (2, Function(p As String()) "(" & p(0) & ", " & p(1) & ")", Function(p As String(), d As Double) d > p(0) And d < p(1))},
+            {"/", (0, Function(p As String()) "/", Function(p As String(), d As Double) True)}
+        }
+        Public ReadOnly Property OperatorCode As String
+        Public ReadOnly Property Parameters As String()
+
+        Public Sub New(intervalCode As String)
+            Dim parts = intervalCode.Split(" ")
+            If Not OperatorCodeCollection.ContainsKey(parts(0)) Then Throw New Exception
+            Me.OperatorCode = parts(0)
+            Me.Parameters = (From i In parts Where IsNumeric(i) Select i).ToArray
+        End Sub
+
+        Public Overrides Function ToString() As String
+            Return OperatorCodeCollection(Me.OperatorCode).IntervalToString(Me.Parameters)
+        End Function
+
+        Public Function IsInInterval(number As Double) As Boolean
+            Return OperatorCodeCollection(Me.OperatorCode).IsInInterval(Me.Parameters, number)
         End Function
     End Class
 

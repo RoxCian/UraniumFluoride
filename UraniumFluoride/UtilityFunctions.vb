@@ -10,6 +10,7 @@ Imports ExcelLogical = System.Object
 Imports ExcelDate = System.Object
 Imports ExcelString = System.Object
 Imports ExcelVariant = System.Object
+Imports ExcelBoolean = System.Object
 Imports ExcelIndex = System.Int32
 #End Region
 
@@ -30,9 +31,23 @@ Public Module UtilityFunctions
         End Get
     End Property
 
-    Private Function IrregularValueHandler(value As ExcelVariant) As ExcelVariant
-        Static IrregularValueArray As ExcelVariant() = {-6798283198, -2039484959.4}
-        If IsNumeric(value) AndAlso IrregularValueArray.Contains(value) Then Return ExcelErrorValue
+    Public ReadOnly Property CallerWorksheet As Excel.Worksheet
+        Get
+            Return ConvertToRange(XlCall.Excel(XlCall.xlfCaller)).Worksheet
+        End Get
+    End Property
+
+    Public ReadOnly Property CallerWorkbook As Excel.Workbook
+        Get
+            Return CallerWorksheet.Parent
+        End Get
+    End Property
+
+    Private Function CheckErrorCode(value As ExcelVariant) As ExcelVariant
+        Static ErrorCodeDictionary As New Dictionary(Of Integer, ExcelError) From {{-2146826281, ExcelErrorDiv0},
+        {-2146826246, ExcelErrorNa}, {-2146826259, ExcelErrorName}, {-2146826288, ExcelErrorNull},
+        {-2146826252, ExcelErrorNum}, {-2146826265, ExcelErrorRef}, {-2146826273, ExcelErrorValue}}
+        If IsNumeric(value) AndAlso ErrorCodeDictionary.ContainsKey(value) Then Return ErrorCodeDictionary(value)
         Return value
     End Function
 
@@ -42,9 +57,9 @@ Public Module UtilityFunctions
         If isSignificant Then
             Dim power As Integer = Math.Floor(Math.Log10(Math.Abs(num)))
 
-            Return IrregularValueHandler(Math.Round(Math.Round(num / 10 ^ power, 14), pre - 1, MidpointRounding.ToEven) * 10 ^ power)
+            Return CheckErrorCode(Math.Round(Math.Round(num / 10 ^ power, 14), pre - 1, MidpointRounding.ToEven) * 10 ^ power)
         Else
-            Return IrregularValueHandler(Math.Round(Math.Round(num, 14), pre, MidpointRounding.ToEven))
+            Return CheckErrorCode(Math.Round(Math.Round(num, 14), pre, MidpointRounding.ToEven))
         End If
     End Function
 
@@ -139,7 +154,6 @@ Public Module UtilityFunctions
     <ExcelFunction(IsVolatile:=True)>
     Public Function RandNoRepeat(bottom As Integer, top As Integer, Optional memorySet As Integer = 0, Optional memories As Integer = 30, Optional unrepeatPossibility As Integer = 0.99, Optional seed As ExcelNumber = "") As ExcelNumber
         Static memory As New ValueCircularListCollection(1024, 1024, Nothing)
-        Dim x = memory
         If top - bottom < 2 Then Return bottom
         If memories < 2 Then memories = 2
         If memories > memory.ListCapacity Then memories = memory.ListCapacity
@@ -182,7 +196,6 @@ Public Module UtilityFunctions
     <ExcelFunction(IsVolatile:=True)>
     Public Function RandDiscreted(bottom As Integer, top As Integer, Optional memorySet As Integer = 0, Optional memories As Integer = 30, Optional unrepeatPossibility As Integer = 0.99, Optional seed As ExcelNumber = "") As ExcelNumber
         Static memory As New ValueCircularListCollection(1024, 1024, Nothing)
-        Dim x = memory
         If top - bottom < 2 Then Return bottom
         If memories < 2 Then memories = 2
         If memories > memory.ListCapacity Then memories = memory.ListCapacity
@@ -271,7 +284,76 @@ Public Module UtilityFunctions
         Do Until cellColumn <= pageColumn
             cellColumn -= pageColumn
         Loop
-        Return PageLocalize(page_Range.Worksheet.UsedRange, pageRow, pageColumn, cellRow, cellColumn, pageIndex)
+        Dim pageLocation = GetPageLocationLRTB(rPage, pageIndex)
+        Dim locationRow = pageRow * (pageLocation.X - 1) + cellRow
+        Dim locationColumn = pageColumn * (pageLocation.Y - 1) + cellColumn
+        Dim usedRow = page_Range.Worksheet.UsedRange.Rows.Count
+        Dim usedColumn = page_Range.Worksheet.UsedRange.Columns.Count
+        If locationRow <= usedRow And locationColumn <= usedColumn And locationRow > 0 And locationColumn > 0 Then Return page_Range.Worksheet.UsedRange(locationRow, locationColumn).Value Else Return ""
+    End Function
+    <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
+    Public Function GetPageCount(<ExcelArgument(AllowReference:=True)> rPage As ExcelRange) As ExcelVariant
+        Dim page_Range As Excel.Range = ConvertToRange(rPage)
+        Try
+            Return GetPageCountInRow(rPage) * GetPageCountInColumn(rPage)
+        Catch
+            Return ExcelErrorNa
+        End Try
+    End Function
+    <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
+    Public Function GetPageCountInRow(<ExcelArgument(AllowReference:=True)> rPage As ExcelRange) As ExcelVariant
+        Dim page_Range As Excel.Range = ConvertToRange(rPage)
+        Try
+            Return Math.Ceiling(page_Range.Worksheet.UsedRange.Columns.Count / page_Range.Columns.Count)
+        Catch
+            Return ExcelErrorNa
+        End Try
+    End Function
+    <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
+    Public Function GetPageCountInColumn(<ExcelArgument(AllowReference:=True)> rPage As ExcelRange) As ExcelVariant
+        Dim page_Range As Excel.Range = ConvertToRange(rPage)
+        Try
+            Return Math.Ceiling(page_Range.Worksheet.UsedRange.Rows.Count / page_Range.Rows.Count)
+        Catch
+            Return ExcelErrorNa
+        End Try
+    End Function
+
+    Public Function GetPageLocationLRTB(<ExcelArgument(AllowReference:=True)> rPage As ExcelRange, index As ExcelIndex) As (X As ExcelIndex, Y As ExcelIndex)
+        Dim countInRow = GetPageCountInRow(rPage)
+        Return (Math.Ceiling(index / countInRow), index Mod countInRow)
+    End Function
+
+    <ExcelFunction(IsVolatile:=True, IsMacroType:=True)>
+    Public Function PageLocalizeSorted(<ExcelArgument(AllowReference:=True)> rPage As ExcelRange, <ExcelArgument(AllowReference:=True)> rSortingCell As ExcelRange, <ExcelArgument(AllowReference:=True)> rSearchingCell As ExcelRange, Optional rank As ExcelIndex = 0, Optional isAscending As Boolean = True) As ExcelVariant
+        Dim page_Range As Excel.Range = ConvertToRange(rPage), sortingCell_Range As Excel.Range = ConvertToRange(rSortingCell), serchingCell_Range As Excel.Range = ConvertToRange(rSearchingCell)
+        Dim cellRow, cellColumn, pageRow, pageColumn As Integer
+        If rank <= 0 Then rank = 1
+        Try
+            pageRow = page_Range.Rows.Count
+            pageColumn = page_Range.Columns.Count
+            cellRow = serchingCell_Range.Row
+            cellColumn = serchingCell_Range.Column
+        Catch ex As NullReferenceException
+            Return ExcelErrorNa
+        End Try
+        Do Until cellRow <= pageRow
+            cellRow -= pageRow
+        Loop
+        Do Until cellColumn <= pageColumn
+            cellColumn -= pageColumn
+        Loop
+        Try
+            Dim pageCount = GetPageCount(rPage)
+            Dim sortingDictionary As New Dictionary(Of ExcelVariant, Integer)
+            For i = 1 To pageCount
+                sortingDictionary.Add(PageLocalizeAbbr(rPage, rSortingCell, i), i)
+            Next
+            If isAscending Then sortingDictionary = sortingDictionary.OrderBy(Function(o) o.Key).ToDictionary(Function(o) o.Key, Function(o) o.Value) Else sortingDictionary = sortingDictionary.OrderByDescending(Function(o) o.Key).ToDictionary(Function(o) o.Key, Function(o) o.Value)
+            Return PageLocalizeAbbr(rPage, rSearchingCell, sortingDictionary.Values(rank - 1))
+        Catch
+            Return ExcelErrorValue
+        End Try
     End Function
 
     '<ExcelFunction(IsMacroType:=True)>
@@ -331,6 +413,11 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction(IsMacroType:=True)>
+    Public Function GetRangeMerged(<ExcelArgument(AllowReference:=True)> cell As ExcelRange) As ExcelRange
+        Return ConvertToExcelReference(ConvertToRange(cell)(1, 1).MergeArea(1, 1))
+    End Function
+
+    <ExcelFunction(IsMacroType:=True, IsVolatile:=True)>
     Public Function ReferencedMergedCellRows(Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "") As ExcelNumber
         Dim r = RelativeReferenceInternal(rangeText, path, worksheetName)
         If TypeOf r Is ClosedXML.Excel.IXLRange Then
@@ -436,27 +523,32 @@ Public Module UtilityFunctions
     End Function
 
     <ExcelFunction>
-    Public Function RegExFind(text As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelNumber
+    Public Function RegExFind(input As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelNumber
         If Not IsNumeric(index) Or index < 1 Then index = 1
         Dim e As New Text.RegularExpressions.Regex(pattern, If(isCaseIgnore, System.Text.RegularExpressions.RegexOptions.IgnoreCase, System.Text.RegularExpressions.RegexOptions.None))
-        Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(text)
+        Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(input)
         If m.Count <= index - 1 Then Return -1 Else Return m(index - 1).Index + 1
     End Function
 
     <ExcelFunction>
-    Public Function RegExMatch(text As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelString
+    Public Function RegExMatch(input As String, pattern As String, Optional index As Integer = 1, Optional isCaseIgnore As Boolean = True) As ExcelString
         If Not IsNumeric(index) Or index < 1 Then index = 1
         Dim e As New Text.RegularExpressions.Regex(pattern, If(isCaseIgnore, System.Text.RegularExpressions.RegexOptions.IgnoreCase, System.Text.RegularExpressions.RegexOptions.None))
-        Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(text)
+        Dim m As System.Text.RegularExpressions.MatchCollection = e.Matches(input)
         If m.Count <= index - 1 Then Return ExcelErrorNull Else Return m(index - 1).Value
     End Function
 
-    <ExcelFunction(IsMacroType:=True)>
+    <ExcelFunction>
+    Public Function RegExReplace(input As String, pattern As String, replacement As String) As ExcelString
+        Return System.Text.RegularExpressions.Regex.Replace(input, pattern, replacement)
+    End Function
+
+    <ExcelFunction(IsMacroType:=True, IsVolatile:=True)>
     Public Function RelativeReference(Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "") As ExcelRange
         Dim result = RelativeReferenceInternal(rangeText, path, worksheetName)
         If TypeOf result Is ClosedXML.Excel.IXLRange Then
             Dim r = CType(result, ClosedXML.Excel.IXLRange)
-            'If r.FirstCell.NeedsRecalculation Then r.Worksheet.RecalculateAllFormulas()
+            If r.FirstCell.NeedsRecalculation Then r.Worksheet.RecalculateAllFormulas()
             Return r.FirstCell.CachedValue
         Else
             Return ConvertToExcelReference(result)
@@ -467,7 +559,7 @@ Public Module UtilityFunctions
         Dim wb As Workbook = Nothing
         If path = "" Then
             Try
-                wb = Application.ThisWorkbook
+                wb = CallerWorkbook
             Catch ex As COMException
                 wb = Application.ActiveWorkbook
             End Try
@@ -501,14 +593,14 @@ Public Module UtilityFunctions
                     Else Return ExcelErrorNa
             End If
         End If
-        If worksheetName = "" Then Return wb.Worksheets(1).Range(rangeText)
+        If worksheetName = "" Then Return CallerWorksheet.Range(rangeText)
         For Each i As Worksheet In wb.Worksheets
             If i.Name = worksheetName Then Return i.Range(rangeText)
         Next
         Return ExcelErrorNa
     End Function
 
-    <ExcelFunction>
+    <ExcelFunction(IsVolatile:=True)>
     Public Function ReferencedVLookUp(keyword As ExcelVariant, Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "", Optional targetColumn As Integer = 1, Optional isApproximateMatching As Boolean = False) As ExcelVariant
         Dim r = RelativeReferenceInternal(rangeText, path, worksheetName)
         If TypeOf r Is ClosedXML.Excel.IXLRange Then
@@ -522,7 +614,7 @@ Public Module UtilityFunctions
         Return ExcelErrorNull
     End Function
 
-    <ExcelFunction>
+    <ExcelFunction(IsVolatile:=True)>
     Public Function ReferencedHLookUp(keyword As ExcelVariant, Optional rangeText As String = "A1", Optional path As String = "", Optional worksheetName As String = "", Optional targetRow As Integer = 1, Optional isApproximateMatching As Boolean = False) As ExcelVariant
         Dim r = RelativeReference(rangeText, path, worksheetName)
         If TypeOf r Is ClosedXML.Excel.IXLRange Then
@@ -668,6 +760,7 @@ Public Module UtilityFunctions
             Return result2.ToString
         End If
     End Function
+
     <ExcelFunction(IsVolatile:=False, IsMacroType:=True)>
     Public Function CopyTextbox(<ExcelArgument(AllowReference:=True)> r As ExcelRange, textBoxName As String, Optional removeAllRecordedTextBoxes As Boolean = False, Optional left As Double = 0, Optional top As Double = 0, Optional width As Double = 0, Optional height As Double = 0) As ExcelVariant
         Static attachedObjects As New Dictionary(Of String, Shape)
@@ -686,16 +779,6 @@ Public Module UtilityFunctions
             attachedObjects.Clear()
         End If
 
-        Do While attachedObjects.ContainsKey(r1st.Address)
-            Try
-                attachedObjects(r1st.Address).Delete()
-            Catch ex As COMException
-            Finally
-                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(attachedObjects(r1st.Address))
-                attachedObjects.Remove(r1st.Address)
-            End Try
-        Loop
-
         Dim t As Shape = Nothing
         Dim f As Boolean = False
         For Each t In ws.Shapes
@@ -706,6 +789,7 @@ Public Module UtilityFunctions
             End If
         Next
         If Not f Then Return "NOTHING TO COPY"
+
         Dim nName = t.Name & "_" & Guid(True)
         Dim nt As Excel.Shape
         Dim textBoxScale As Double = 1
@@ -714,6 +798,22 @@ Public Module UtilityFunctions
         Catch ex As AccessViolationException
             textBoxScale = 1
         End Try
+        If width <= 0 Then width = t.Width * textBoxScale
+        If height <= 0 Then height = t.Height * textBoxScale
+        If top <= 0 Then top = r1st.MergeArea.Top + (r1st.MergeArea.Height - height) / 2
+        If left <= 0 Then left = r1st.MergeArea.Left + (r1st.MergeArea.Width - width) / 2
+
+        Do While attachedObjects.ContainsKey(r1st.Address)
+            If width = attachedObjects(r1st.Address).Width And height = attachedObjects(r1st.Address).Height And top = attachedObjects(r1st.Address).Top And left = attachedObjects(r1st.Address).Left Then Return " "
+            Try
+                attachedObjects(r1st.Address).Delete()
+            Catch ex As COMException
+            Finally
+                System.Runtime.InteropServices.Marshal.FinalReleaseComObject(attachedObjects(r1st.Address))
+                attachedObjects.Remove(r1st.Address)
+            End Try
+        Loop
+
         Try
             t.Name = t.Name
         Catch ex As COMException
@@ -765,16 +865,13 @@ Public Module UtilityFunctions
     Public Function RemoveObject(objectName As String, Optional worksheetName As String = "", Optional continued As Boolean = False) As ExcelVariant
         Dim ws As Worksheet = Nothing
         If worksheetName = "" Then
-            Application.ThisWorkbook.Activate()
-            ws = Application.ActiveSheet
+            ws = CallerWorksheet
         Else
-            Dim a As Worksheet
-            For Each a In Application.ActiveWorkbook.Worksheets
+            For Each a In CallerWorkbook.Worksheets
                 If a.Name = worksheetName Then ws = a
             Next
         End If
         If ws Is Nothing Then Return "NOTHING TO REMOVE"
-        Dim s As Shape = Nothing
         Dim f As Boolean
         f = False
         For Each s In ws.Shapes
@@ -786,6 +883,35 @@ Public Module UtilityFunctions
             End If
         Next
         If Not f Then Return "NOTHING TO REMOVE" Else Return 0
+    End Function
+
+    <ExcelFunction>
+    Public Function ReserveTextbox(objectNames As String, Optional worksheetName As String = "", Optional isForceExecute As Boolean = False) As ExcelNumber
+        Static firstRun As Boolean = True
+        If firstRun Or isForceExecute Then
+            Dim ws As Worksheet = Nothing
+            If worksheetName = "" Then
+                ws = CallerWorksheet
+            Else
+                For Each a In CallerWorkbook.Worksheets
+                    If a.Name = worksheetName Then ws = a
+                Next
+            End If
+            If ws Is Nothing Then Return "NOTHING TO REMOVE"
+            Dim f As Boolean
+            f = False
+            Dim objectNameList = objectNames.Split(",").ToList
+            For Each s In ws.Shapes
+                If Not objectNameList.Contains(s.Name) And s.Type = Microsoft.Office.Core.MsoShapeType.msoTextBox Then
+                    s.Delete()
+                    s = Nothing
+                    f = True
+                End If
+            Next
+            firstRun = False
+            If Not f Then Return "NOTHING TO REMOVE"
+        End If
+        Return 0
     End Function
 
     <ExcelFunction>
@@ -816,9 +942,13 @@ Public Module UtilityFunctions
 
     <ExcelFunction(IsMacroType:=True)>
     Public Function StringSplit(target As String, separator As String, index As Integer) As ExcelString
-        If target.Split(separator).Count > index - 1 Then Return target.Split(separator)(index - 1) Else Return ExcelErrorNull
+        If target.Split(separator).Count > index - 1 And index >= 1 Then Return target.Split(separator)(index - 1) Else Return ExcelErrorNull
     End Function
 
+    <ExcelFunction(IsMacroType:=True)>
+    Public Function StringSplitArray(target As String, separator As String) As ExcelString()
+        Return target.Split(separator)
+    End Function
     <ExcelFunction(IsMacroType:=True)>
     Public Function GetHashCode(arg As ExcelVariant) As ExcelNumber
         If TypeOf arg Is ExcelError Then
@@ -834,9 +964,9 @@ Public Module UtilityFunctions
         End If
     End Function
 
-    <ExcelFunction>
-    Public Function UsedRange(<ExcelArgument(AllowReference:=True)> r As ExcelVariant) As ExcelRange
-        Return ConvertToExcelReference(ConvertToRange(r).Parent.UsedRange)
+    <ExcelFunction(IsMacroType:=True)>
+    Public Function UsedRange() As ExcelRange
+        Return ConvertToExcelReference(CallerWorksheet.UsedRange)
     End Function
 
     <ExcelFunction>
@@ -924,6 +1054,7 @@ Public Module UtilityFunctions
     Public Function CCRSplineAnalyze(xValues As ExcelNumber(,), yValues As ExcelNumber(,), command As ExcelString, ParamArray parameters As ExcelNumber()) As ExcelNumber
         Static memory As New CircularList(Of CatmullRomSpline)(256)
         Static [step] = 0.01
+        Static alpha = 0.7
         Dim pl As New List(Of Numerics.Vector2)
         Dim cSpline As CatmullRomSpline
         Dim mf As Boolean = False
@@ -933,6 +1064,7 @@ Public Module UtilityFunctions
                     pl.Add(New Numerics.Vector2(If(IsDate(xValues(i, j)), CDate(xValues(i, j)).ToOADate, xValues(i, j)), If(IsDate(yValues(i, j)), CDate(yValues(i, j)).ToOADate, yValues(i, j))))
             Next
         Next
+        If pl.Count < 3 Then Return ExcelErrorNull
         Dim cIndex As Integer
         For cIndex = -memory.Count + 1 To 0
             If memory(cIndex).P.Count = pl.Count Then
@@ -946,16 +1078,16 @@ Public Module UtilityFunctions
             End If
         Next
         If Not mf Then
-            cSpline = New CatmullRomSpline(pl.ToArray)
+            cSpline = New CatmullRomSpline(pl.ToArray, alpha)
             memory.MoveNext(cSpline)
         Else
             cSpline = memory(cIndex)
         End If
         Select Case command
             Case "GetX"
-                Return cSpline.GetX(parameters(0), [step])
+                Return cSpline.GetXValue(parameters(0), [step])
             Case "GetY"
-                Return cSpline.GetY(parameters(0), [step])
+                Return cSpline.GetYValue(parameters(0), [step])
             Case "GetYMax"
                 Return cSpline.GetYMaxPlot([step]).Y
             Case "GetXInYMax"
@@ -964,11 +1096,127 @@ Public Module UtilityFunctions
                 Return cSpline.GetXMaxPlot([step]).X
             Case "GetYInXMax"
                 Return cSpline.GetXMaxPlot([step]).Y
+            Case "GetXSeries"
+                Return (From i In cSpline.GetAllPlots([step]) Select CObj(i.X)).ToArray
+            Case "GetYSeries"
+                Return (From i In cSpline.GetAllPlots([step]) Select CObj(i.Y)).ToArray
+            Case "PlotCount"
+                Return cSpline.GetAllPlots([step]).Count
             Case Else
                 Return ExcelErrorValue
         End Select
     End Function
 
+    <ExcelFunction>
+    Public Function IntervalToString(intervalCode As String) As ExcelString
+        Try
+            Dim interval As New Interval(intervalCode)
+            Return interval.ToString
+        Catch
+            Return ExcelErrorValue
+        End Try
+    End Function
+
+    <ExcelFunction>
+    Public Function IsInInterval(intervalCode As String, number As Double) As ExcelBoolean
+        Try
+            Dim interval As New Interval(intervalCode)
+            Return interval.IsInInterval(number)
+        Catch
+            Return ExcelErrorValue
+        End Try
+    End Function
+
+    <ExcelFunction>
+    Public Function [For](start As Double, finish As Double, [step] As Double) As ExcelVariant()
+        Dim result As New List(Of ExcelVariant)
+        For i = start To finish Step [step]
+            result.Add(i)
+        Next
+        Return result.ToArray
+    End Function
+
+    <ExcelFunction>
+    Public Function Deduplicate(values As ExcelVariant(,)) As ExcelVariant()
+        Dim result As New List(Of ExcelVariant)
+        For Each i In values
+            If Not result.Contains(i) And TypeOf i IsNot ExcelMissing Then result.Add(i)
+        Next
+        Return result.ToArray
+    End Function
+
+    <ExcelFunction>
+    Public Function Concat(values As ExcelVariant(,), Optional charBetweenColumn As ExcelString = " ", Optional charBetweenRow As ExcelString = Chr(13), Optional isContainsEmpty As Boolean = False) As ExcelString
+        If TypeOf charBetweenColumn Is ExcelMissing Then charBetweenColumn = " "
+        If TypeOf charBetweenRow Is ExcelMissing Then charBetweenRow = Chr(13)
+        Dim result As New Text.StringBuilder
+
+        Dim rfrf As Boolean = True
+        For i = values.GetLowerBound(0) To values.GetUpperBound(0)
+            Dim lnf As Boolean = False
+            Dim cfrf As Boolean = True
+            For j = values.GetLowerBound(1) To values.GetUpperBound(1)
+                If TypeOf values(i, j) Is ExcelMissing Or (Not isContainsEmpty AndAlso (TypeOf values(i, j) Is ExcelEmpty OrElse CStr(values(i, j)) = "" OrElse (IsNumeric(values(i, j)) AndAlso Val(values(i, j)) = 0))) Then Continue For
+                lnf = True
+                If Not cfrf Then result.Append(charBetweenColumn)
+                result.Append(values(i, j))
+                cfrf = False
+                rfrf = False
+            Next
+            If lnf And i <> values.GetUpperBound(0) And Not rfrf Then result.Append(charBetweenRow)
+        Next
+        Return result.ToString
+    End Function
+
+    <ExcelFunction>
+    Public Function LinqWhere(<ExcelArgument(AllowReference:=True)> r As ExcelRange, expression As ExcelString) As ExcelRange
+        If TypeOf r Is ExcelReference Then
+            Dim _range = TrimRange(r)
+            If TypeOf _range IsNot Excel.Range Then Return ExcelErrorValue
+            Dim _result As Range
+            For i = 1 To _range.Rows.Count
+                For j = 1 To _range.Columns.Count
+                    If CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", _range(i, j).Address(,, , True)))) Then
+                        If _result Is Nothing Then _result = _range(i, j) Else _result = Application.Union(_result, _range(i, j))
+                    End If
+                Next
+            Next
+            Return ConvertToExcelReference(_result)
+        ElseIf IsArray(r) Then
+            Dim _r = DirectCast(r, Array)
+            Dim _result As New List(Of ExcelVariant)
+            For Each i In _r
+                If CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", """" & i & """"))) Then _result.Add(i)
+            Next
+            Return _result.ToArray
+        Else
+            If CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", """" & r & """"))) Then Return r Else Return ""
+        End If
+    End Function
+
+    <ExcelFunction>
+    Public Function LinqSelect(<ExcelArgument(AllowReference:=True)> r As ExcelRange, expression As ExcelString) As ExcelVariant
+        If TypeOf r Is ExcelReference Then
+            Dim _range = TrimRange(r)
+            If TypeOf _range IsNot Excel.Range Then Return ExcelErrorValue
+            Dim _result(_range.Rows.Count - 1, _range.Columns.Count - 1) As ExcelVariant
+            For i = 1 To _range.Rows.Count
+                For j = 1 To _range.Columns.Count
+                    _result(i - 1, j - 1) = CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", _range(i, j).Address(,, , True))))
+                Next
+            Next
+            Return _result
+        ElseIf IsArray(r) Then
+            Dim _r = DirectCast(r, Array)
+            Dim _result As New List(Of ExcelVariant)
+            For Each i In _r
+                _result.Add(CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", """" & i & """"))))
+            Next
+            Return _result.ToArray
+        Else
+            If CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", """" & r & """"))) Then Return r Else Return ""
+        End If
+    End Function
     ''Questionable
     '<ExcelFunction>
     'Public Function FormulaRegister(formulaName As String, formula As String) As ExcelVariant
