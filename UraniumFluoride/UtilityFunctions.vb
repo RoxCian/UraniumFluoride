@@ -681,7 +681,7 @@ Public Module UtilityFunctions
 
     <ExcelFunction>
     Public Function Contains(arg As ExcelVariant, searching As ExcelVariant) As ExcelLogical
-        If IsArray(arg) AndAlso arg.Count > 1 Then
+        If IsArray(arg) AndAlso (LBound(searching, 1) > 1 OrElse LBound(searching, 2) > 1) Then
             For Each i In arg
                 If searching Is arg Then
                     Dim j As Integer = LBound(searching)
@@ -804,8 +804,8 @@ Public Module UtilityFunctions
         If left <= 0 Then left = r1st.MergeArea.Left + (r1st.MergeArea.Width - width) / 2
 
         Do While attachedObjects.ContainsKey(r1st.Address)
-            If width = attachedObjects(r1st.Address).Width And height = attachedObjects(r1st.Address).Height And top = attachedObjects(r1st.Address).Top And left = attachedObjects(r1st.Address).Left Then Return " "
             Try
+                If width = attachedObjects(r1st.Address).Width And height = attachedObjects(r1st.Address).Height And top = attachedObjects(r1st.Address).Top And left = attachedObjects(r1st.Address).Left Then Return " "
                 attachedObjects(r1st.Address).Delete()
             Catch ex As COMException
             Finally
@@ -1145,25 +1145,26 @@ Public Module UtilityFunctions
         Return result.ToArray
     End Function
 
-    <ExcelFunction>
-    Public Function Concat(values As ExcelVariant(,), Optional charBetweenColumn As ExcelString = " ", Optional charBetweenRow As ExcelString = Chr(13), Optional isContainsEmpty As Boolean = False) As ExcelString
+    <ExcelFunction(IsVolatile:=True)>
+    Public Function Concat2(values As ExcelVariant(,), Optional charBetweenColumn As ExcelString = " ", Optional charBetweenRow As ExcelString = Chr(13), Optional isContainsEmpty As Boolean = False) As ExcelString
         If TypeOf charBetweenColumn Is ExcelMissing Then charBetweenColumn = " "
         If TypeOf charBetweenRow Is ExcelMissing Then charBetweenRow = Chr(13)
+        Dim concatElements As New List(Of ConcatModelElement)
         Dim result As New Text.StringBuilder
 
-        Dim rfrf As Boolean = True
         For i = values.GetLowerBound(0) To values.GetUpperBound(0)
-            Dim lnf As Boolean = False
-            Dim cfrf As Boolean = True
             For j = values.GetLowerBound(1) To values.GetUpperBound(1)
                 If TypeOf values(i, j) Is ExcelMissing Or (Not isContainsEmpty AndAlso (TypeOf values(i, j) Is ExcelEmpty OrElse CStr(values(i, j)) = "" OrElse (IsNumeric(values(i, j)) AndAlso Val(values(i, j)) = 0))) Then Continue For
-                lnf = True
-                If Not cfrf Then result.Append(charBetweenColumn)
-                result.Append(values(i, j))
-                cfrf = False
-                rfrf = False
+                If concatElements.Count > 0 AndAlso Not concatElements.Last.IsColumnSplitter AndAlso Not concatElements.Last.IsRowSplitter Then concatElements.Add(New ConcatModelElement(charBetweenColumn, False, True))
+                concatElements.Add(values(i, j).ToString)
             Next
-            If lnf And i <> values.GetUpperBound(0) And Not rfrf Then result.Append(charBetweenRow)
+            If concatElements.Count > 0 AndAlso Not concatElements.Last.IsColumnSplitter AndAlso Not concatElements.Last.IsRowSplitter Then concatElements.Add(New ConcatModelElement(charBetweenRow, True, False))
+        Next
+        Do While concatElements.Count > 0 AndAlso (concatElements.Last.IsRowSplitter Or concatElements.Last.IsColumnSplitter)
+            concatElements.RemoveAt(concatElements.Count - 1)
+        Loop
+        For Each i In concatElements
+            result.Append(i)
         Next
         Return result.ToString
     End Function
@@ -1176,7 +1177,7 @@ Public Module UtilityFunctions
             Dim _result As Range
             For i = 1 To _range.Rows.Count
                 For j = 1 To _range.Columns.Count
-                    If CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", _range(i, j).Address(,, , True)))) Then
+                    If CheckErrorCode(_range.Worksheet.Evaluate(CStr(expression).Replace("$$var", _range(i, j).Address(,, , True)))) Then
                         If _result Is Nothing Then _result = _range(i, j) Else _result = Application.Union(_result, _range(i, j))
                     End If
                 Next
@@ -1186,11 +1187,12 @@ Public Module UtilityFunctions
             Dim _r = DirectCast(r, Array)
             Dim _result As New List(Of ExcelVariant)
             For Each i In _r
-                If CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", """" & i & """"))) Then _result.Add(i)
+                Dim _resultElement = CallerWorksheet.Evaluate(CStr(expression).Replace("$$var", """" & i & """"))
+                If CheckErrorCode(If(TypeOf _resultElement Is Range, _resultElement.Value, _resultElement)) Then _result.Add(i)
             Next
             Return _result.ToArray
         Else
-            If CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", """" & r & """"))) Then Return r Else Return ""
+            If CheckErrorCode(CallerWorksheet.Evaluate(CStr(expression).Replace("$$var", """" & r & """"))) Then Return r Else Return ""
         End If
     End Function
 
@@ -1202,7 +1204,8 @@ Public Module UtilityFunctions
             Dim _result(_range.Rows.Count - 1, _range.Columns.Count - 1) As ExcelVariant
             For i = 1 To _range.Rows.Count
                 For j = 1 To _range.Columns.Count
-                    _result(i - 1, j - 1) = CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", _range(i, j).Address(,, , True))))
+                    Dim _resultElement = _range.Worksheet.Evaluate(CStr(expression).Replace("$$var", _range(i, j).Address(,,, True)))
+                    _result(i - 1, j - 1) = CheckErrorCode(If(TypeOf _resultElement Is Range, _resultElement.Value, If(TypeOf _resultElement Is Array, _resultElement(1), _resultElement)))
                 Next
             Next
             Return _result
@@ -1210,13 +1213,26 @@ Public Module UtilityFunctions
             Dim _r = DirectCast(r, Array)
             Dim _result As New List(Of ExcelVariant)
             For Each i In _r
-                _result.Add(CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", """" & i & """"))))
+                Dim _resultElement = CallerWorksheet.Evaluate(CStr(expression).Replace("$$var", """" & i & """"))
+                _result.Add(CheckErrorCode(If(TypeOf _resultElement Is Range, _resultElement.Value, _resultElement)))
             Next
             Return _result.ToArray
         Else
-            If CheckErrorCode(Application.Evaluate(CStr(expression).Replace("$$var", """" & r & """"))) Then Return r Else Return ""
+            If CheckErrorCode(CallerWorksheet.Evaluate(CStr(expression).Replace("$$var", """" & r & """"))) Then Return r Else Return ""
         End If
     End Function
+
+    Private objcache As New Dictionary(Of String, Object)
+    <ExcelFunction>
+    Public Function SetObjectCache(objectName As ExcelString, o As ExcelVariant) As ExcelNumber
+        If objcache.ContainsKey(objectName) Then objcache(objectName) = o Else objcache.Add(objectName, o)
+        Return 0
+    End Function
+    <ExcelFunction>
+    Public Function GetObjectCache(objectName As ExcelString, objectSetter As ExcelVariant) As ExcelVariant
+        If objcache.ContainsKey(objectName) Then Return objcache(objectName) Else Return ExcelErrorNull
+    End Function
+
     ''Questionable
     '<ExcelFunction>
     'Public Function FormulaRegister(formulaName As String, formula As String) As ExcelVariant

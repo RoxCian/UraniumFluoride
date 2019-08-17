@@ -1,4 +1,6 @@
-﻿Namespace Helper
+﻿Imports ExcelDna.Integration
+
+Namespace Helper
 #Disable Warning IDE0051
     Public Class ValueCircularListCollection
         Inherits CircularListCollection(Of Integer?)
@@ -383,8 +385,8 @@
         Private Shared ReadOnly OperatorCodeCollection As New Dictionary(Of String, (InitializingParameterCount As Integer, IntervalToString As Func(Of String(), String), IsInInterval As Func(Of String(), Double, Boolean))) From {
             {"gt", (1, Function(p As String()) "＞" & p(0), Function(p As String(), d As Double) d > p(0))},
             {"lt", (1, Function(p As String()) "＜" & p(0), Function(p As String(), d As Double) d < p(0))},
-            {"ge", (1, Function(p As String()) "≥" & p(0), Function(p As String(), d As Double) d >= p(0))},
-            {"le", (1, Function(p As String()) "≤" & p(0), Function(p As String(), d As Double) d <= p(0))},
+            {"ge", (1, Function(p As String()) If(Environment.OSVersion.Version.Major = 10, "⩾", "≥") & p(0), Function(p As String(), d As Double) d >= p(0))}, '"⩾"
+            {"le", (1, Function(p As String()) If(Environment.OSVersion.Version.Major = 10, "⩽", "≤") & p(0), Function(p As String(), d As Double) d <= p(0))}, '"⩽"
             {"in", (2, Function(p As String()) p(0) & "～" & p(1), Function(p As String(), d As Double) d >= p(0) And d <= p(1))},
             {"eq", (2, Function(p As String()) p(0), Function(p As String(), d As Double) d = p(0))},
             {"lc", (2, Function(p As String()) "[" & p(0) & ", +∞)", Function(p As String(), d As Double) d >= p(0))},
@@ -416,4 +418,32 @@
         End Function
     End Class
 
+    Public Class ExcelReferenceInterop
+        Private Sub New()
+        End Sub
+        Public Shared Function Rows(r As ExcelReference) As ExcelReference
+
+        End Function
+
+    End Class
+
+    Public Class ConcatModelElement
+        Public ReadOnly Property Value As String
+        Public ReadOnly Property IsColumnSplitter As Boolean
+        Public ReadOnly Property IsRowSplitter As Boolean
+        Public Sub New(value As String, isRowSplitter As Boolean, isColumnSplitter As Boolean)
+            Me.Value = value
+            Me.IsRowSplitter = isRowSplitter
+            If isRowSplitter Then Me.IsColumnSplitter = False Else Me.IsColumnSplitter = isColumnSplitter
+        End Sub
+        Public Overrides Function ToString() As String
+            Return Me.Value
+        End Function
+        Public Shared Narrowing Operator CType(e As ConcatModelElement) As String
+            Return e.ToString
+        End Operator
+        Public Shared Widening Operator CType(e As String) As ConcatModelElement
+            Return New ConcatModelElement(e, False, False)
+        End Operator
+    End Class
 End Namespace
