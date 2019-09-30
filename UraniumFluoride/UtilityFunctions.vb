@@ -1052,36 +1052,27 @@ Public Module UtilityFunctions
 
     <ExcelFunction>
     Public Function CCRSplineAnalyze(xValues As ExcelNumber(,), yValues As ExcelNumber(,), command As ExcelString, ParamArray parameters As ExcelNumber()) As ExcelNumber
-        Static memory As New CircularList(Of CatmullRomSpline)(256)
+        Static memory As New Dictionary(Of Integer, CatmullRomSpline)
         Static [step] = 0.01
         Static alpha = 0.7
         Dim pl As New List(Of Numerics.Vector2)
         Dim cSpline As CatmullRomSpline
         Dim mf As Boolean = False
+        Dim plhash As Integer
         For i = 0 To Min(xValues.GetLength(0), yValues.GetLength(0)) - 1
             For j = 0 To Min(xValues.GetLength(1), yValues.GetLength(1)) - 1
-                If (IsNumeric(xValues(i, j)) Or IsDate(xValues(i, j))) And (IsNumeric(yValues(i, j)) Or IsDate(yValues(i, j))) Then _
+                If (IsNumeric(xValues(i, j)) Or IsDate(xValues(i, j))) And (IsNumeric(yValues(i, j)) Or IsDate(yValues(i, j))) Then
                     pl.Add(New Numerics.Vector2(If(IsDate(xValues(i, j)), CDate(xValues(i, j)).ToOADate, xValues(i, j)), If(IsDate(yValues(i, j)), CDate(yValues(i, j)).ToOADate, yValues(i, j))))
+                    plhash = plhash Xor pl.Last.GetHashCode
+                End If
             Next
         Next
         If pl.Count < 3 Then Return ExcelErrorNull
-        Dim cIndex As Integer
-        For cIndex = -memory.Count + 1 To 0
-            If memory(cIndex).P.Count = pl.Count Then
-                Dim j As Integer = 0
-                Do
-                    If memory(cIndex).P(0) <> pl(0) Then Continue For
-                    j += 1
-                Loop Until j > memory(cIndex).P.Count - 1
-                mf = True
-                Exit For
-            End If
-        Next
-        If Not mf Then
+        If Not memory.ContainsKey(plhash) Then
             cSpline = New CatmullRomSpline(pl.ToArray, alpha)
-            memory.MoveNext(cSpline)
+            memory.Add(plhash, cSpline)
         Else
-            cSpline = memory(cIndex)
+            cSpline = memory(plhash)
         End If
         Select Case command
             Case "GetX"
@@ -1199,13 +1190,14 @@ Public Module UtilityFunctions
     <ExcelFunction>
     Public Function LinqSelect(<ExcelArgument(AllowReference:=True)> r As ExcelRange, expression As ExcelString) As ExcelVariant
         If TypeOf r Is ExcelReference Then
-            Dim _range = TrimRange(r)
-            If TypeOf _range IsNot Excel.Range Then Return ExcelErrorValue
-            Dim _result(_range.Rows.Count - 1, _range.Columns.Count - 1) As ExcelVariant
-            For i = 1 To _range.Rows.Count
-                For j = 1 To _range.Columns.Count
-                    Dim _resultElement = _range.Worksheet.Evaluate(CStr(expression).Replace("$$var", _range(i, j).Address(,,, True)))
-                    _result(i - 1, j - 1) = CheckErrorCode(If(TypeOf _resultElement Is Range, _resultElement.Value, If(TypeOf _resultElement Is Array, _resultElement(1), _resultElement)))
+            Dim _r = CType(r, ExcelReference)
+            Dim _result(_r.RowLast - _r.RowFirst, _r.ColumnLast - _r.ColumnFirst) As ExcelVariant
+            For i = 0 To _r.RowLast - _r.RowFirst
+                For j = 0 To _r.ColumnLast - _r.ColumnFirst
+                    'Dim c = New ExcelReference(_r.RowFirst + i, _r.RowFirst + i, _r.ColumnFirst + j, _r.ColumnFirst + j, _r.SheetId)
+
+                    Dim _resultElement = XlCall.Excel(XlCall.xlfEvaluate, CStr(expression).Replace("$$var", XlCall.Excel(XlCall.xlfAddress, _r.RowFirst + i + 1, _r.ColumnFirst + j + 1, 1)))
+                    _result(i, j) = CheckErrorCode(If(TypeOf _resultElement Is ExcelReference, _resultElement.GetValue, If(TypeOf _resultElement Is Array, _resultElement(0, 0), _resultElement)))
                 Next
             Next
             Return _result
@@ -1213,8 +1205,8 @@ Public Module UtilityFunctions
             Dim _r = DirectCast(r, Array)
             Dim _result As New List(Of ExcelVariant)
             For Each i In _r
-                Dim _resultElement = CallerWorksheet.Evaluate(CStr(expression).Replace("$$var", """" & i & """"))
-                _result.Add(CheckErrorCode(If(TypeOf _resultElement Is Range, _resultElement.Value, _resultElement)))
+                Dim _resultElement = XlCall.Excel(XlCall.xlfEvaluate, CStr(expression).Replace("$$var", """" & i & """"))
+                _result.Add(CheckErrorCode(If(TypeOf _resultElement Is ExcelReference, _resultElement.GetValue, _resultElement)))
             Next
             Return _result.ToArray
         Else
@@ -1222,14 +1214,16 @@ Public Module UtilityFunctions
         End If
     End Function
 
-    Private objcache As New Dictionary(Of String, Object)
+    Private objcache As New Dictionary(Of ExcelVariant, ExcelVariant)
+
     <ExcelFunction>
-    Public Function SetObjectCache(objectName As ExcelString, o As ExcelVariant) As ExcelNumber
+    Public Function SetObjectCache(objectName As ExcelVariant, o As ExcelVariant) As ExcelNumber
         If objcache.ContainsKey(objectName) Then objcache(objectName) = o Else objcache.Add(objectName, o)
         Return 0
     End Function
+
     <ExcelFunction>
-    Public Function GetObjectCache(objectName As ExcelString, objectSetter As ExcelVariant) As ExcelVariant
+    Public Function GetObjectCache(objectName As ExcelVariant, objectSetter As ExcelVariant) As ExcelVariant
         If objcache.ContainsKey(objectName) Then Return objcache(objectName) Else Return ExcelErrorNull
     End Function
 
